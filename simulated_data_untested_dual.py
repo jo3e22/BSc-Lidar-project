@@ -7,11 +7,11 @@ from matplotlib.animation import FuncAnimation
 fov = 48  # Field of view in degrees
 num_detectors = 16  # Number of detectors
 detector_angle = fov / num_detectors
-room_size = 15  # Room size in meters
+room_size = 10  # Room size in meters
 object_speed = 0.5  # meters per second
-object_distance = 10.0  # meters from the sensors
+object_distance = 8.0  # meters from the sensors
 object_width = 1.0  # meters
-sensor_distance = 2.0  # distance between the two sensors
+sensor_distance = 5.0  # distance between the two sensors
 
 # Set up the plot
 fig, ax = plt.subplots(figsize=(8, 8))
@@ -20,12 +20,12 @@ ax.set_ylim(0, room_size)
 ax.set_aspect('equal')
 
 # Initialize wedges for detectors of the first sensor angled inward
-angle_offset = 5  # degrees to angle inward
-detectors1 = [Wedge((-sensor_distance / 2, 0), room_size, 90 - fov/2 + i*detector_angle - angle_offset, 90 - fov/2 + (i+1)*detector_angle - angle_offset, color='gray', alpha=0.5) for i in range(num_detectors)]
+angle_offset = 20  # degrees to angle inward
+detectors1 = [Wedge((-sensor_distance / 2, 0), 100, 90 - fov/2 + i*detector_angle - angle_offset, 90 - fov/2 + (i+1)*detector_angle - angle_offset, color='gray', alpha=0.5) for i in range(num_detectors)]
 highlighted1 = [Wedge((-sensor_distance / 2, 0), 0, 90 - fov/2 + i*detector_angle - angle_offset, 90 - fov/2 + (i+1)*detector_angle - angle_offset, color='red', alpha=0.5) for i in range(num_detectors)]
 
 # Initialize wedges for detectors of the second sensor angled inward
-detectors2 = [Wedge((sensor_distance / 2, 0), room_size, 90 - fov/2 + i*detector_angle + angle_offset, 90 - fov/2 + (i+1)*detector_angle + angle_offset, color='gray', alpha=0.5) for i in range(num_detectors)]
+detectors2 = [Wedge((sensor_distance / 2, 0), 100, 90 - fov/2 + i*detector_angle + angle_offset, 90 - fov/2 + (i+1)*detector_angle + angle_offset, color='gray', alpha=0.5) for i in range(num_detectors)]
 highlighted2 = [Wedge((sensor_distance / 2, 0), 0, 90 - fov/2 + i*detector_angle + angle_offset, 90 - fov/2 + (i+1)*detector_angle + angle_offset, color='red', alpha=0.5) for i in range(num_detectors)]
 
 for wedge in detectors1 + highlighted1 + detectors2 + highlighted2:
@@ -53,7 +53,7 @@ def update(frame):
 
         angle_to_object = np.degrees(np.arctan2(object_distance, object_position + sensor_distance / 2))
         if start_angle <= angle_to_object <= end_angle:
-            highlight.set_radius(object_distance / np.cos(np.radians(angle_to_object - start_angle)))
+            highlight.set_radius(np.sqrt(object_distance**2 + (object_position + sensor_distance / 2)**2))
             highlight.set_color('red')
         else:
             highlight.set_radius(0)
@@ -66,8 +66,8 @@ def update(frame):
 
         angle_to_object = np.degrees(np.arctan2(object_distance, object_position - sensor_distance / 2))
         if start_angle <= angle_to_object <= end_angle:
-            highlight.set_radius(object_distance / np.cos(np.deg2rad(angle_to_object - start_angle)))
-            highlight.set_color('red')
+            highlight.set_radius(np.sqrt(object_distance**2 + (object_position - sensor_distance / 2)**2))
+            highlight.set_color('blue')
         else:
             highlight.set_radius(0)
             highlight.set_color('gray')
