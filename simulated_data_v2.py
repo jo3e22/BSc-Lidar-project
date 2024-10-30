@@ -3,6 +3,24 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from matplotlib.animation import FuncAnimation
 
+class Environment:
+    def __init__(self, x_length, y_length):
+        self.x_length = x_length  # Dimensions in m
+        self.y_length = y_length  # Dimensions in m
+    
+        border_width = 10
+        self.map = np.zeros((x_length*10+border_width, y_length*10+border_width), dtype = np.uint8)
+
+        self.map[:border_width, :] = 255  # Top border
+        self.map[-border_width:, :] = 255  # Bottom border
+        self.map[:, :border_width] = 255  # Left border
+        self.map[:, -border_width:] = 255  # Right border
+
+    def plot_map(self):
+        plt.imshow(self.map, cmap='gray', interpolation='none')
+        plt.title('Environment Map')
+        plt.show()
+
 class Sensor:
     def __init__(self, x, y, angle_offset, color):
         self.x = x
@@ -38,30 +56,6 @@ class Sensor:
             highlight.set_radius(0)
             highlight.set_color('gray')
 
-# Simulation parameters
-fov = 48  # Field of view in degrees
-num_detectors = 16  # Number of detectors
-room_size = 20  # Room size in meters
-object_speed = 0.5  # meters per second
-object_distance = 10.0  # meters from the sensors
-object_width = 1.0  # meters
-
-# Create sensors
-sensor_1 = Sensor(1.75/2, 0, 5, 'red')
-sensor_2 = Sensor(-1.75/2, 0, -5, 'blue')
-
-# Set up the plot
-fig, ax = plt.subplots(figsize=(8, 8))
-ax.set_xlim(-room_size / 2, room_size / 2)
-ax.set_ylim(0, room_size)
-ax.set_aspect('equal')
-
-# Add sensors to plot
-sensor_1.add_to_plot(ax)
-sensor_2.add_to_plot(ax)
-
-obj_sc = ax.scatter([], [], c='red', s=100, label='Object')
-
 def init():
     obj_sc.set_offsets(np.c_[[], []])
     sensor_1.reset()
@@ -83,6 +77,30 @@ def update(frame):
     obj_sc.set_offsets(object_positions)
     return sensor_1.detectors + sensor_1.highlighted + sensor_2.detectors + sensor_2.highlighted + [obj_sc]
 
-# Keep a reference to the animation object
-anim = FuncAnimation(fig, update, init_func=init, frames=300, interval=100)
-plt.show()
+
+if __name__ == "__main__":
+    # Create environment
+    room = Environment(20, 20)
+    room.plot_map()
+
+    '''
+    # Create sensors
+    sensor_1 = Sensor(1.75/2, 0, 5, 'red')
+    sensor_2 = Sensor(-1.75/2, 0, -5, 'blue')
+
+    # Set up the plot
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.set_xlim(-room_size / 2, room_size / 2)
+    ax.set_ylim(0, room_size)
+    ax.set_aspect('equal')
+
+    # Add sensors to plot
+    sensor_1.add_to_plot(ax)
+    sensor_2.add_to_plot(ax)
+
+    obj_sc = ax.scatter([], [], c='red', s=100, label='Object')
+
+    # Keep a reference to the animation object
+    anim = FuncAnimation(fig, update, init_func=init, frames=300, interval=100)
+    plt.show()
+    '''
