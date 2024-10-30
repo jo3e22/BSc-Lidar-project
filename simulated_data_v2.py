@@ -2,24 +2,40 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from matplotlib.animation import FuncAnimation
+import matplotlib.patches as patches
 
 class Environment:
-    def __init__(self, x_length, y_length):
-        self.x_length = x_length  # Dimensions in m
-        self.y_length = y_length  # Dimensions in m
-    
-        border_width = 10
-        self.map = np.zeros((x_length*10+border_width, y_length*10+border_width), dtype = np.uint8)
+    """
+    Environment Class created an array of the input dimensions + a surrounding border of set reflectivity.
+    Inputs:
+        Required:
+            x_length: determines the x axis length
+            y_length: determines the y axis height
+        Optional:
+            border_reflectivity: determines how reflective the border will be
+    """
+    def __init__(self, x_length, y_length, border_reflectivity = 0.5):
+        self.x_length = int(x_length)  # Dimensions in m
+        self.y_length = int(y_length)  # Dimensions in m
+        self.border_intensity = int(255*border_reflectivity)
+        self.border_width = 2
 
-        self.map[:border_width, :] = 255  # Top border
-        self.map[-border_width:, :] = 255  # Bottom border
-        self.map[:, :border_width] = 255  # Left border
-        self.map[:, -border_width:] = 255  # Right border
+        self.map = np.zeros((  (self.x_length*10)+self.border_width, (self.y_length*10)+self.border_width  ), dtype = np.uint8)
+        self.map[:self.border_width, :] = self.border_intensity  # Top border
+        self.map[-self.border_width:, :] = self.border_intensity  # Bottom border
+        self.map[:, :self.border_width] = self.border_intensity  # Left border
+        self.map[:, -self.border_width:] = self.border_intensity  # Right border
+
+        self.fig, self.ax = plt.subplots()
 
     def plot_map(self):
-        plt.imshow(self.map, cmap='gray', interpolation='none')
+        self.ax.imshow(self.map, cmap='gray', interpolation='none', origin='lower')
+        plt.axis('off')
         plt.title('Environment Map')
         plt.show()
+
+    def add_object(self, object_mask):
+        self.map = self.map + object_mask
 
 class Sensor:
     def __init__(self, x, y, angle_offset, color):
@@ -31,7 +47,7 @@ class Sensor:
         self.detector_angle = fov / num_detectors
         self.color = color
 
-        self.detectors = [Wedge((x, y), 200, 90 - fov/2 + i*self.detector_angle + angle_offset, 90 - fov/2 + (i+1)*self.detector_angle + angle_offset, color='gray', alpha=0.5) for i in range(num_detectors)]
+        self.detectors = [Wedge((x, y), 100, 90 - fov/2 + i*self.detector_angle + angle_offset, 90 - fov/2 + (i+1)*self.detector_angle + angle_offset, color='gray', alpha=0.5) for i in range(num_detectors)]
         self.highlighted = [Wedge((x, y), 0, 90 - fov/2 + i*self.detector_angle + angle_offset, 90 - fov/2 + (i+1)*self.detector_angle + angle_offset, color=color, alpha=0.5) for i in range(num_detectors)]
 
     def add_to_plot(self, ax):
@@ -81,26 +97,23 @@ def update(frame):
 if __name__ == "__main__":
     # Create environment
     room = Environment(20, 20)
+
+    target_mask = np.zeros_like(room.map)
+    target_mask[50:60, 50:60] = 255
+    room.add_object(target_mask)
+
     room.plot_map()
 
-    '''
     # Create sensors
-    sensor_1 = Sensor(1.75/2, 0, 5, 'red')
-    sensor_2 = Sensor(-1.75/2, 0, -5, 'blue')
+    sensor_1 = Sensor(0, 0, 0, 'red')
 
-    # Set up the plot
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.set_xlim(-room_size / 2, room_size / 2)
-    ax.set_ylim(0, room_size)
-    ax.set_aspect('equal')
 
     # Add sensors to plot
-    sensor_1.add_to_plot(ax)
-    sensor_2.add_to_plot(ax)
+    sensor_1.add_to_plot(room.ax)
+    sensor_2.add_to_plot(room.ax)
 
-    obj_sc = ax.scatter([], [], c='red', s=100, label='Object')
-
+    '''
     # Keep a reference to the animation object
-    anim = FuncAnimation(fig, update, init_func=init, frames=300, interval=100)
+    anim = FuncAnimation(room.fig, update, init_func=init, frames=300, interval=100)
     plt.show()
     '''
