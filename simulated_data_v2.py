@@ -20,100 +20,153 @@ class Environment:
         self.border_intensity = int(255*border_reflectivity)
         self.border_width = 2
 
-        self.map = np.zeros((  (self.x_length*10)+self.border_width, (self.y_length*10)+self.border_width  ), dtype = np.uint8)
+        self.map = np.zeros((  (self.x_length)+self.border_width, (self.y_length)+self.border_width  ), dtype = np.uint8)
         self.map[:self.border_width, :] = self.border_intensity  # Top border
         self.map[-self.border_width:, :] = self.border_intensity  # Bottom border
         self.map[:, :self.border_width] = self.border_intensity  # Left border
         self.map[:, -self.border_width:] = self.border_intensity  # Right border
 
-        self.fig, self.ax = plt.subplots()
-
-    def plot_map(self):
-        self.ax.imshow(self.map, cmap='gray', interpolation='none', origin='lower')
-        plt.axis('off')
-        plt.title('Environment Map')
-        plt.show()
-
     def add_object(self, object_mask):
-        self.map = self.map + object_mask
+        if np.shape(self.map) == np.shape(object_mask):
+            self.map = self.map + object_mask
+        else:
+            self.map = self.map
+            print('Error adding object to environment')
 
 class Sensor:
-    def __init__(self, x, y, angle_offset, color):
+    def __init__(self, x, y, angle_offset, pixel_map):
         self.x = x
         self.y = y
         self.angle_offset = angle_offset
         self.fov = 48
         self.num_detectors = 16
-        self.detector_angle = fov / num_detectors
-        self.color = color
+        self.detector_angle = self.fov / self.num_detectors
+        self.pixel_map = pixel_map
+        self.detectors = [self.create_detector_mask(90 - self.fov/2 + i*self.detector_angle - self.angle_offset, 
+                                                    90 - self.fov/2 + (i+1)*self.detector_angle - self.angle_offset) 
+                          for i in range(self.num_detectors)]
 
-        self.detectors = [Wedge((x, y), 100, 90 - fov/2 + i*self.detector_angle + angle_offset, 90 - fov/2 + (i+1)*self.detector_angle + angle_offset, color='gray', alpha=0.5) for i in range(num_detectors)]
-        self.highlighted = [Wedge((x, y), 0, 90 - fov/2 + i*self.detector_angle + angle_offset, 90 - fov/2 + (i+1)*self.detector_angle + angle_offset, color=color, alpha=0.5) for i in range(num_detectors)]
+    def create_detector_mask(self, start_angle, end_angle):
+        height, width = np.shape(self.pixel_map)
+        mask = np.zeros((height, width))
+        start_angle_rad = np.deg2rad(start_angle)
+        end_angle_rad = np.deg2rad(end_angle)
+        
+        for i in range(height):
+            for j in range(width):
+                angle = np.atan2(i - self.y, j - self.x)
+                if start_angle_rad <= angle <= end_angle_rad:
+                    mask[i, j] = 1
+        return mask
 
-    def add_to_plot(self, ax):
-        for wedge in self.detectors + self.highlighted:
-            ax.add_patch(wedge)
-
-    def update(self, object_position, object_distance):
-        for i, (detector, highlight) in enumerate(zip(self.detectors, self.highlighted)):
-            start_angle = 90 - self.fov/2 + i * self.detector_angle + self.angle_offset
-            end_angle = start_angle + self.detector_angle
-
-            angle_to_object = np.degrees(np.arctan2(object_distance, object_position - self.x))
-            if start_angle <= angle_to_object <= end_angle:
-                highlight.set_radius(np.sqrt(object_distance**2 + (object_position - self.x)**2))
-                highlight.set_color(self.color)
+    def scan(self, pixel_map):
+        distances_arr = []
+        for detector in self.detectors:
+            masked_array = pixel_map * detector
+            non_zero_points = np.argwhere(masked_array > 0)
+            distances = np.sqrt((non_zero_points[:, 0] - self.y)**2 + (non_zero_points[:, 1] - self.x)**2)
+            if len(distances) > 0:
+                min_distance = np.min(distances)
+                distances_arr.append(min_distance)
             else:
-                highlight.set_radius(0)
-                highlight.set_color('gray')
+                distances_arr.append(1000)
+        return distances_arr
 
-    def reset(self):
-        for highlight in self.highlighted:
-            highlight.set_radius(0)
-            highlight.set_color('gray')
+    def plot_detector(self, ax, distances_arr):
+        for i, distance in enumerate(distances_arr):
+            start_angle = 90 - self.fov/2 + i*self.detector_angle - self.angle_offset
+            end_angle = start_angle + self.detector_angle
+            mid_angle = (start_angle + end_angle) / 2
+            mid_angle_rad = np.deg2rad(mid_angle)
+            
+            # Plot the dotted line in the middle of each detector's view
+            ax.plot([self.x, self.x + distance * np.cos(mid_angle_rad)], 
+                    [self.y, self.y + distance * np.sin(mid_angle_rad)], 
+                    linestyle='dotted', color='blue')
+            
+            # Highlight the bar at each distance the detector returns
+            ax.plot([self.x + distance * np.cos(mid_angle_rad)], 
+                    [self.y + distance * np.sin(mid_angle_rad)], 
+                    marker='o', color='red')
 
-def init():
-    obj_sc.set_offsets(np.c_[[], []])
-    sensor_1.reset()
-    sensor_2.reset()
-    return sensor_1.detectors + sensor_1.highlighted + sensor_2.detectors + sensor_2.highlighted + [obj_sc]
+class object:
+    def __init__(self, x_start, y_start, x_vel, y_vel, shape, reflectivity = 0.75):
+        self.x_start = x_start
+        self.y_start = y_start
+        self.x_vel = x_vel
+        self.y_vel = y_vel
+        
+        self.shape = shape
+        self.reflectivity = reflectivity
+        self.mask = self.create_mask()
 
-def update(frame):
-    global object_position
-    object_position = (frame * object_speed) % (room_size * 2) - room_size
+    def create_mask(self):
+        '''
+        if type(self.shape) == np.array:
+            return self.shape
+        elif shape == 'square':
+            mask = np.full((5, 5), (self.reflectivity*255), dtype=uint8) 
+            return mask
+        else:
+            return np.zeros((5,5))
+        '''
+        return np.full((5, 5), (self.reflectivity*255), dtype=np.uint8)
 
-    # Object's position (moving side to side)
-    object_positions = [[object_position, object_distance]]
+def update(frame, object_name, environment_name, sensor_1, ax):
+    def add_small_mask_to_large_mask(large_mask, small_mask, y, x):
+        # Ensure x and y are integers
+        x = int(x)
+        y = int(y)
+
+        # Calculate the top-left corner of the small mask in the large mask
+        top_left_x = x - small_mask.shape[0] // 2
+        top_left_y = y - small_mask.shape[1] // 2
+
+        # Wrap around if the object goes beyond the boundaries
+        top_left_x = top_left_x % large_mask.shape[0]
+        top_left_y = top_left_y % large_mask.shape[1]
+
+        # Add the small mask to the large mask
+        for i in range(small_mask.shape[0]):
+            for j in range(small_mask.shape[1]):
+                large_mask[(top_left_x + i) % large_mask.shape[0], (top_left_y + j) % large_mask.shape[1]] = small_mask[i, j]
+
+        return large_mask
+
+    large_mask = np.copy(environment_name.map)
+    small_mask = object_name.mask
+    object_x = (frame * object_name.x_vel) % (environment_name.x_length * 2) - environment_name.x_length + object_name.x_start
+    object_y = (frame * object_name.y_vel) % (environment_name.y_length * 2) - environment_name.y_length + object_name.y_start
+
+    environment_map = add_small_mask_to_large_mask(large_mask, small_mask, object_x, object_y)
+
+    # Clear the previous plot
+    ax.clear()
+    ax.imshow(environment_map, cmap='gray', interpolation='none', origin='lower')
+    ax.axis('off')
+    ax.set_title('Environment Map')
 
     # Update sensors
-    sensor_1.update(object_position, object_distance)
-    sensor_2.update(object_position, object_distance)
-
-    # Update plot
-    obj_sc.set_offsets(object_positions)
-    return sensor_1.detectors + sensor_1.highlighted + sensor_2.detectors + sensor_2.highlighted + [obj_sc]
-
+    min_distances_1 = sensor_1.scan(environment_map)
+    min_distances_2 = sensor_2.scan(environment_map)
+    sensor_1.plot_detector(ax, min_distances_1)
+    sensor_2.plot_detector(ax, min_distances_2)
+    
+    # Return the updated artists
+    return ax.images +ax.lines
 
 if __name__ == "__main__":
     # Create environment
-    room = Environment(20, 20)
+    room = Environment(200, 200)
 
-    target_mask = np.zeros_like(room.map)
-    target_mask[50:60, 50:60] = 255
-    room.add_object(target_mask)
+    target = object(00, 170, 5, -2, 'square')
 
-    room.plot_map()
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10)) 
 
     # Create sensors
-    sensor_1 = Sensor(0, 0, 0, 'red')
+    sensor_1 = Sensor(110, room.border_width, -10, room.map)
+    sensor_2 = Sensor(90, room.border_width, 10, room.map)
 
-
-    # Add sensors to plot
-    sensor_1.add_to_plot(room.ax)
-    sensor_2.add_to_plot(room.ax)
-
-    '''
     # Keep a reference to the animation object
-    anim = FuncAnimation(room.fig, update, init_func=init, frames=300, interval=100)
+    anim = FuncAnimation(fig, update, fargs=(target, room, sensor_1, ax), frames=300, interval=100, blit=True)
     plt.show()
-    '''
