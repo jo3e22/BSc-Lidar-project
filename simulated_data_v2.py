@@ -45,6 +45,7 @@ class Sensor:
         self.detectors = [self.create_detector_mask(90 - self.fov/2 + i*self.detector_angle - self.angle_offset, 
                                                     90 - self.fov/2 + (i+1)*self.detector_angle - self.angle_offset) 
                           for i in range(self.num_detectors)]
+        self.distances_arr = np.zeros((16, 1))  # will change def scan to use this array that can be called in new function locate_object.
 
     def create_detector_mask(self, start_angle, end_angle):
         height, width = np.shape(self.pixel_map)
@@ -89,7 +90,7 @@ class Sensor:
                     [self.y + distance * np.sin(mid_angle_rad)], 
                     marker='o', color='red')
 
-class object:
+class Object:
     def __init__(self, x_start, y_start, x_vel, y_vel, shape, reflectivity = 0.75):
         self.x_start = x_start
         self.y_start = y_start
@@ -112,7 +113,7 @@ class object:
         '''
         return np.full((5, 5), (self.reflectivity*255), dtype=np.uint8)
 
-def update(frame, object_name, environment_name, sensor_1, ax):
+def update(frame, object_name, environment_name, sensors, ax):
     def add_small_mask_to_large_mask(large_mask, small_mask, y, x):
         # Ensure x and y are integers
         x = int(x)
@@ -147,26 +148,30 @@ def update(frame, object_name, environment_name, sensor_1, ax):
     ax.set_title('Environment Map')
 
     # Update sensors
-    min_distances_1 = sensor_1.scan(environment_map)
-    min_distances_2 = sensor_2.scan(environment_map)
-    sensor_1.plot_detector(ax, min_distances_1)
-    sensor_2.plot_detector(ax, min_distances_2)
+    for Sensor in sensors:
+        min_distances = Sensor.scan(environment_map)
+        Sensor.plot_detector(ax, min_distances)
     
     # Return the updated artists
     return ax.images +ax.lines
 
+def locate_object():
+    '''
+    will use this function to take the detector readings and locate an object.
+    '''
+
 if __name__ == "__main__":
     # Create environment
-    room = Environment(200, 200)
+    Room = Environment(200, 200)
 
-    target = object(00, 170, 5, -2, 'square')
+    Target = Object(00, 170, 5, -1, 'square')
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 10)) 
 
     # Create sensors
-    sensor_1 = Sensor(110, room.border_width, -10, room.map)
-    sensor_2 = Sensor(90, room.border_width, 10, room.map)
+    Sensor1 = Sensor(110, Room.border_width, -10, Room.map)
+    Sensor2 = Sensor(90, Room.border_width, 10, Room.map)
 
     # Keep a reference to the animation object
-    anim = FuncAnimation(fig, update, fargs=(target, room, sensor_1, ax), frames=300, interval=100, blit=True)
+    anim = FuncAnimation(fig, update, fargs=(Target, Room, [Sensor1, Sensor2], ax), frames=300, interval=1, blit=True)
     plt.show()
