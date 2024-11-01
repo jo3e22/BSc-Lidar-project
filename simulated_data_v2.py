@@ -4,7 +4,7 @@ from matplotlib.patches import Wedge
 from matplotlib.animation import FuncAnimation
 import matplotlib.patches as patches
 import math as math
-import leddar as leddar
+#import leddar as leddar
 
 class Environment:
     """
@@ -47,7 +47,7 @@ class Sensor:
         self.detectors = [self.create_detector_mask(90 - self.fov/2 + i*self.detector_angle - self.angle_offset, 
                                                     90 - self.fov/2 + (i+1)*self.detector_angle - self.angle_offset) 
                           for i in range(self.num_detectors)]
-        self.distances_arr = np.zeros((16, 1))  # will change def scan to use this array that can be called in new function locate_object.
+        self.data_arr = np.zeros((2, 16))  # will change def scan to use this array that can be called in new function locate_object.
 
     def create_detector_mask(self, start_angle, end_angle):
         height, width = np.shape(self.pixel_map)
@@ -63,20 +63,34 @@ class Sensor:
         return mask
 
     def scan(self, pixel_map):
-        distances_arr = []
-        for detector in self.detectors:
+        for i, detector in enumerate(self.detectors):
             masked_array = pixel_map * detector
             non_zero_points = np.argwhere(masked_array > 0)
             distances = np.sqrt((non_zero_points[:, 0] - self.y)**2 + (non_zero_points[:, 1] - self.x)**2)
             if len(distances) > 0:
-                min_distance = np.min(distances)
-                distances_arr.append(min_distance)
+                min_distance_index = np.argmin(distances)
+                min_distance = distances[min_distance_index]
+                closest_value = masked_array[non_zero_points[min_distance_index][0], non_zero_points[min_distance_index][1]]
+                closest_value = closest_value / (min_distance/100)**2
+                self.data_arr[0, i] = min_distance
+                self.data_arr[1, i] = closest_value
             else:
-                distances_arr.append(1000)
-        return distances_arr
+                self.data_arr[0, i] = 0
+                self.data_arr[1, i] = 0
+        return self.data_arr
 
-    def plot_detector(self, ax, distances_arr):
-        for i, distance in enumerate(distances_arr):
+    def get_points(self):
+        points = []
+        for i in range(self.num_detectors):
+            distance = self.data_arr[0, i]
+            angle = 90 - self.fov/2 + i*self.detector_angle - self.angle_offset
+            angle_rad = np.deg2rad(angle)
+            points.append((self.x + distance * np.cos(angle_rad), self.y + distance * np.sin(angle_rad)))
+        return points
+
+    def plot_detector(self, ax, data_arr):
+        for i in range(self.num_detectors):
+            distance = self.data_arr[0, i]
             start_angle = 90 - self.fov/2 + i*self.detector_angle - self.angle_offset
             end_angle = start_angle + self.detector_angle
             mid_angle = (start_angle + end_angle) / 2
@@ -87,10 +101,30 @@ class Sensor:
                     [self.y, self.y + distance * np.sin(mid_angle_rad)], 
                     linestyle='dotted', color='blue')
             
+            '''
             # Highlight the bar at each distance the detector returns
             ax.plot([self.x + distance * np.cos(mid_angle_rad)], 
                     [self.y + distance * np.sin(mid_angle_rad)], 
                     marker='o', color='red')
+            '''
+
+            ax.plot([self.x + distance * np.cos(mid_angle_rad-np.deg2rad(1.5)), self.x + distance * np.cos(mid_angle_rad+np.deg2rad(1.5))], 
+                    [self.y + distance * np.sin(mid_angle_rad-np.deg2rad(1.5)), self.y + distance * np.sin(mid_angle_rad+np.deg2rad(1.5))], 
+                    linestyle='dotted', color='red')
+
+    def blind_plot(self):
+        mask = np.zeros((np.shape(self.pixel_map)))
+        for i in range(self.num_detectors):
+            detector_mask = self.detectors[i]
+            distance = self.data_arr[0, i]
+            height, width = np.shape(self.pixel_map)
+            
+            for y in range(height):
+                for x in range(width):
+                    if detector_mask[y, x] == 1:
+                        if np.sqrt((y - self.y)**2 + (x - self.x)**2) <= distance:
+                            mask[y, x] = 1
+        return mask
 
 class Object:
     def __init__(self, shape, x_start, y_start, x_vel = 0, y_vel = 0, reflectivity = 0.75):
@@ -113,7 +147,7 @@ class Object:
         else:
             return np.zeros((5,5))
         '''
-        return np.full((self.shape, self.shape), (self.reflectivity*255), dtype=np.uint8)
+        return np.full((self.shape[0], self.shape[-1]), (self.reflectivity*255), dtype=np.uint8)
 
 def add_small_mask_to_large_mask(large_mask, small_mask, y, x):
         # Ensure x and y are integers
@@ -161,6 +195,18 @@ def locate_object():
     '''
     will use this function to take the detector readings and locate an object.
     '''
+
+def init(environment_dimensions, object_size, object_loc, leftsensor_loc, rightsensor_loc):
+    # Create Environment
+    objEnvironment = Environment(environment_dimensions[0], environment_dimensions[-1])
+    objObject = Object(shape=object_size, x_start=(object_loc[0]+objEnvironment.border_width), y_start=(object_loc[-1]+objEnvironment.border_width))
+
+    objLeftLidar = Sensor(leftsensor_loc[0]+objEnvironment.border_width, leftsensor_loc[1]+objEnvironment.border_width, leftsensor_loc[2], objEnvironment.map)
+    objRightLidar = Sensor(rightsensor_loc[0]-objEnvironment.border_width, rightsensor_loc[1]+objEnvironment.border_width, rightsensor_loc[2], objEnvironment.map)
+
+    full_map = add_small_mask_to_large_mask(objEnvironment.map, objObject.mask, objObject.x_start, objObject.y_start)
+
+    return full_map, objLeftLidar, objRightLidar 
 
 if __name__ == "__main__":
     # Create environment
