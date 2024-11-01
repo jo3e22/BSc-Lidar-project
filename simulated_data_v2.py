@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from matplotlib.animation import FuncAnimation
 import matplotlib.patches as patches
+import math as math
+import leddar as leddar
 
 class Environment:
     """
@@ -55,7 +57,7 @@ class Sensor:
         
         for i in range(height):
             for j in range(width):
-                angle = np.atan2(i - self.y, j - self.x)
+                angle = math.atan2(i - self.y, j - self.x)
                 if start_angle_rad <= angle <= end_angle_rad:
                     mask[i, j] = 1
         return mask
@@ -91,7 +93,7 @@ class Sensor:
                     marker='o', color='red')
 
 class Object:
-    def __init__(self, x_start, y_start, x_vel, y_vel, shape, reflectivity = 0.75):
+    def __init__(self, shape, x_start, y_start, x_vel = 0, y_vel = 0, reflectivity = 0.75):
         self.x_start = x_start
         self.y_start = y_start
         self.x_vel = x_vel
@@ -111,10 +113,9 @@ class Object:
         else:
             return np.zeros((5,5))
         '''
-        return np.full((5, 5), (self.reflectivity*255), dtype=np.uint8)
+        return np.full((self.shape, self.shape), (self.reflectivity*255), dtype=np.uint8)
 
-def update(frame, object_name, environment_name, sensors, ax):
-    def add_small_mask_to_large_mask(large_mask, small_mask, y, x):
+def add_small_mask_to_large_mask(large_mask, small_mask, y, x):
         # Ensure x and y are integers
         x = int(x)
         y = int(y)
@@ -134,6 +135,7 @@ def update(frame, object_name, environment_name, sensors, ax):
 
         return large_mask
 
+def update(frame, object_name, environment_name, sensors, ax):
     large_mask = np.copy(environment_name.map)
     small_mask = object_name.mask
     object_x = (frame * object_name.x_vel) % (environment_name.x_length * 2) - environment_name.x_length + object_name.x_start
@@ -173,5 +175,5 @@ if __name__ == "__main__":
     Sensor2 = Sensor(90, Room.border_width, 10, Room.map)
 
     # Keep a reference to the animation object
-    anim = FuncAnimation(fig, update, fargs=(Target, Room, [Sensor1, Sensor2], ax), frames=300, interval=1, blit=True)
+    anim = FuncAnimation(fig, update, fargs=(Target, Room, [Sensor1, Sensor2], ax), frames=300, interval=10, blit=True)
     plt.show()

@@ -1,6 +1,6 @@
 #%%
 import cv2
-import leddartech
+import leddar
 import time
 
 # Initialize the LIDAR
