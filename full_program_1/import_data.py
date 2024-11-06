@@ -34,5 +34,17 @@ class ScanData:
         plt.show()
 
 data_frames = init.get_dataframes("C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/data_folder")
-df = data_frames[0]
+df = data_frames[3]
 file_name = df.attrs['filename']
+
+r_arr = df['Distance (cm)']
+r_arr = r_arr[0:16]
+theta_arr = np.radians(np.linspace(90-45/2, 90+45/2, 16))
+fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+#plot each section of 16 rows as a separate line
+ax.plot(theta_arr, r_arr, marker = 'o', label='Intensity')
+
+
+ax.set_title(file_name)
+ax.legend()
+plt.show()
