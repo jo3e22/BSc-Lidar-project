@@ -57,3 +57,13 @@ points = [(0, 0), (1, 1), (2, 2), (3, 5), (4, 4), (5, 5), (6, 6)]
 initial_segment = find_segment(points)[0]
 grown_segment = grow_segment(points, initial_segment)
 print(grown_segment)
+
+
+def check_arcs(point1, point1):
+    d1, r1 = point1
+    d2, r2 = point2
+    distances = [d1, d2]
+
+    min_distance_idnex = distances.index(min(distances))
+    max_distance_index = distances.index(max(distances))
+    

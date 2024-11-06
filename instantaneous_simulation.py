@@ -9,7 +9,7 @@ import simulated_data_v2 as sim
 import pandas as pd
 
 # %%
-map, leftLidar, rightLidar = sim.init([1000, 500], [50], [100, 400], [250-80, 0, 15], [250+80, 0, -15])
+map, leftLidar, rightLidar = sim.init([500, 500], [50], [100, 400], [250-80, 0, 15], [250+80, 0, -15])
 #map, leftLidar, rightLidar = sim.init([1000], [50], [350, 400], [500-80, 0, 15], [500+80, 0, -15])
 left_data = leftLidar.scan(map)
 right_data = rightLidar.scan(map)
@@ -40,7 +40,7 @@ right_points = np.array(rightLidar.get_points())
 plt.plot(left_points[:, 0], left_points[:, 1], 'ro')
 plt.plot(right_points[:, 0], right_points[:, 1], 'bo')
 plt.xlim(0, 500)
-plt.ylim(0, 1000)
+plt.ylim(0, 500)
 plt.show()
 
 
