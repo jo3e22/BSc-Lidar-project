@@ -3,6 +3,38 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import program_init as init
+import re
+
+class File_Data:
+    def __init__(self, data_frame):
+        self.file_name, self.theta_arr, self.r_arr, self.i_arr = get_values(data_frame)
+        self.x_arr, self.y_arr = polar2cartesian(self.theta_arr, self.r_arr)
+        self.pattern = r"(\w+)\.(\d+)\.(\d+)\.(\w+)X(\d+)Y(\d+)_leddar(\d+)\.lvm"
+        self.obj_x, self.obj_y, self.leddar, self.identifier = self.split_file_name(self.file_name)
+    
+    def split_file_name(self, pattern):
+        # Use re.match to find the pattern
+        match = re.match(self.pattern, self.file_name)
+
+        if match:
+            shape, day, month, grid_identifier, x, y, leddar = match.groups()
+            if leddar == '1':
+                leddar = 'Left'
+            elif leddar == '2':
+                leddar = 'Right'
+            else:
+                leddar = 'Unknown'
+        
+            return x, y, leddar, identifier
+
+
+
+
+
+
+
+
+
 
 def get_values(data_frame, offset=0):
     df = data_frame

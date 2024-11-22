@@ -59,7 +59,7 @@ def read_lvm_file(file_path, testing=False):
     
     return df
 
-def main(directory, testing=False):
+def main(directory, string = None, testing=False):
     '''
     This function is the main logic for the program. It will search the given directory for .lvm files and read them into pandas DataFrames.
     Inputs:
@@ -75,10 +75,14 @@ def main(directory, testing=False):
             print(f"Processing file: {lvm_file}")  # Debug print
         df = read_lvm_file(lvm_file)
         if not df.empty:  # Only append non-empty DataFrames
-            data_frames.append(df)
+            if string is not None:
+                if string in df.attrs['filename']:
+                    data_frames.append(df)
+            else:
+                data_frames.append(df)
     return data_frames
 
-def get_dataframes(directory = "C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/data_folder", testing=False):
+def get_dataframes(directory = "C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/data_folder", string=None, testing=False):
     '''
     This function is the entry point for the program. It will search the given directory for .lvm files and read them into pandas DataFrames.
     Inputs:
@@ -87,7 +91,7 @@ def get_dataframes(directory = "C:/Users/james/OneDrive - University of Southamp
     Outputs:
         data_frames (list): A list of pandas DataFrames containing the data from the .lvm files. Each DataFrame will have an attribute 'filename' containing the name of the file it was read from.
     '''
-    return main(directory, testing)
+    return main(directory, string, testing)
 
 if __name__ == "__main__":
     testing = False
