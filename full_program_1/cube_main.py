@@ -5,7 +5,7 @@ import simulated_data_v2 as sim
 import numpy as np
 
 directory = "C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/data_folder"
-data_frames = init.get_dataframes(directory, '24offset', False)
+data_frames = init.get_dataframes(directory, 'grid', False)
 centre_of_lidars = 685
 
 def main(df, ax):
@@ -170,6 +170,15 @@ for i in range(len(data_frames)):
                 sensor2.plot_cartesian(ax)
                 plot_background(ax, sensor, sensor2, Data)
                 ax.legend()
+                plt.show()
+
+                room = np.zeros((1545, 1520))
+                leftLidar = sim.Sensor(595, 0, 0, room)
+                leftLidar.data_arr = sensor.polar
+                rightLidar = sim.Sensor(775, 0, 0, room)
+                rightLidar.data_arr = sensor2.polar
+                leftLidar.blind_plot()
+                plt.imshow(leftLidar.mask)
                 plt.show()
 
 '''
