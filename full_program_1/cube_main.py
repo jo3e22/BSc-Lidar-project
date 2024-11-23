@@ -5,7 +5,7 @@ import simulated_data_v2 as sim
 import numpy as np
 
 directory = "C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/data_folder"
-data_frames = init.get_dataframes(directory, 'cube', False)
+data_frames = init.get_dataframes(directory, '24offset', False)
 centre_of_lidars = 685
 
 def main(df, ax):
@@ -56,6 +56,23 @@ def identify(Data, identifier):
         Data.offset = 0
         Data.separation = 180
 
+def plot_background(ax, sensor1, sensor2, Data):
+    x = [370, 480, 590, 700, 810, 920, 1030, 1140]
+    y = [330, 480, 630, 780, 930, 1080, 1305, 1520]
+    room = np.zeros((1545, 1520))
+
+    for i in x:
+        for j in y:
+            ax.plot(i, j, '+', color='grey')
+    ax.plot(sensor2.x, 0, 'o', color = 'blue')
+    ax.plot(sensor1.x, 0, 'o', color = 'blue')
+    ax.plot(int(Data.obj_x), int(Data.obj_y), 'o', color = 'green', markersize=10)
+    ax.axvline(x=223, color = 'grey', linestyle='dotted')
+
+    ax.set_xlim(0, 1545)
+    ax.set_ylim(0, 1520)
+    plt.show()
+
 class Sensor:
     def __init__(self, Data):
         self.y = 0
@@ -76,13 +93,14 @@ class Sensor:
             sep = -Data.offset
         elif Data.leddar == 'Right':
             sep = Data.offset
-        angles = Data.theta_arr + np.deg2rad(sep)
+        angles = Data.theta_arr[::-1] + np.deg2rad(sep)
+        #angles = angles[-16:]
         polar = (angles, Data.r_arr)
 
         return polar
 
     def cartesian(self):
-        theta = np.deg2rad(self.polar[0]) + np.pi/2
+        theta = (self.polar[0])
         r = self.polar[1]
         x = y = np.zeros(len(r))
         for i in range(len(r)):
@@ -90,19 +108,18 @@ class Sensor:
                 x[i] = self.x
                 y[i] = 0
             else:
-                x[i] = r[i] * np.cos(theta[i])
-                y[i] = r[i] * np.sin(theta[i])
+                x[i] = self.x + r[i] * np.cos(theta[i])
+                y[i] = self.y + r[i] * np.sin(theta[i])
         cartesian = (x, y)
 
         return cartesian
     
     def plot_cartesian(self, ax):
-        ax.scatter(self.cartesian[0], self.cartesian[1], label='Distance (cm)')
-        for i, x in enumerate(self.cartesian[0]):
-            y = self.cartesian[1][i]
-            ax.plot([self.x, x], [self.y, y], linestyle='dotted', color='blue')
-        ax.set_title(Data.file_name)
-        ax.legend()
+        for i in range(len(self.polar[0])):
+            ax.plot([self.x, self.x + self.polar[1][i] * np.cos(self.polar[0][i])], 
+                    [0, self.polar[1][i] * np.sin(self.polar[0][i])], 
+                    linestyle='dotted', color='blue')
+            ax.scatter(self.x + self.polar[1][i] * np.cos(self.polar[0][i]), self.polar[1][i] * np.sin(self.polar[0][i]), color='red')
 
     def plot_polar(self, ax):
         ax.plot(self.polar[0], self.polar[1], label='Distance (cm)')
@@ -132,20 +149,45 @@ class Sensor:
                     [0, length * np.sin(self.polar[0][i])], 
                     linestyle='dotted', color='gray')
 
+
+for i in range(len(data_frames)):
+    df = data_frames[i]
+    Data = dp.File_Data(df)
+    identify(Data, Data.identifier)
+    for j in range(i, len(data_frames)):
+        if i != j:
+            df2 = data_frames[j]
+            Data2 = dp.File_Data(df2)
+            identify(Data2, Data2.identifier)
+            if Data.pair_label == Data2.pair_label:
+                fig, ax = plt.subplots(figsize=(10, 10))
+                ax.set_title(str(Data.pair_label))
+                sensor = Sensor(Data)
+                sensor.plot_blank(ax)
+                sensor.plot_cartesian(ax)
+                sensor2 = Sensor(Data2)
+                sensor2.plot_blank(ax)
+                sensor2.plot_cartesian(ax)
+                plot_background(ax, sensor, sensor2, Data)
+                ax.legend()
+                plt.show()
+
+'''
 for i in range(len(data_frames)):
     fig, ax = plt.subplots(figsize=(10, 10))
     df = data_frames[i]
     Data = dp.File_Data(df)
     identify(Data, Data.identifier)
+    print(Data.pair_label)
 
     sensor = Sensor(Data)
     sensor.plot_blank(ax)
     sensor.plot_cartesian(ax)
     ax.set_xlim(0, 1545)
     ax.set_ylim(0, 1520)
-    plt.show()
+    #plt.show()
 
-
+'''
 
 
 

@@ -11,7 +11,7 @@ class File_Data:
         self.x_arr, self.y_arr = polar2cartesian(self.theta_arr, self.r_arr)
         self.pattern = r"(\w+)\.(\d+)\.(\d+)\.(\w+)X(\d+)Y(\d+)_leddar(\d+)\.lvm"
         self.pattern2 = r"(\w+)\.(\d+)\.(\d+)\.(\w+)\.(\w+)X(\d+)Y(\d+)_leddar(\d+)\.lvm"
-        self.obj_x, self.obj_y, self.leddar, self.identifier = self.split_file_name(self.file_name)
+        self.obj_x, self.obj_y, self.leddar, self.identifier, self.pair_label = self.split_file_name(self.file_name)
     
     def split_file_name(self, pattern):
         # Use re.match to find the pattern
@@ -20,6 +20,7 @@ class File_Data:
 
         if match:
             shape, day, month, identifier, x, y, leddar = match.groups()
+            pair_label = identifier + '.' + x + '.' + y
             if leddar == '1':
                 leddar = 'Left'
             elif leddar == '2':
@@ -29,6 +30,7 @@ class File_Data:
         elif match2:
             shape, day, month, identifier_a, identifier_b, x, y, leddar = match2.groups()
             identifier = identifier_a + '.' + identifier_b
+            pair_label = identifier + '.' + x + '.' + y
             if leddar == '1':
                 leddar = 'Left'
             elif leddar == '2':
@@ -36,9 +38,9 @@ class File_Data:
             else:
                 leddar = 'Unknown'
         else:
-            shape = day = month = identifier = x = y = leddar = None
+            shape = day = month = identifier = x = y = leddar = pair_label =None
         
-        return x, y, leddar, identifier
+        return x, y, leddar, identifier, pair_label
 
 
 
@@ -56,7 +58,9 @@ def get_values(data_frame, offset=0):
     i_arr = df['Intensity (relative)']
     r_arr = r_arr[0:16]
     i_arr = i_arr[0:16]
-    theta_arr = np.radians(np.linspace(90-45/2+offset, 90+45/2+offset, 16))
+    theta_arr = np.linspace(90-45/2+offset, 90+45/2+offset, 16)
+    theta_arr = np.radians(theta_arr)
+
     return file_name, theta_arr, r_arr, i_arr
 
 def polar2cartesian(theta, r):
