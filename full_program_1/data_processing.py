@@ -10,22 +10,35 @@ class File_Data:
         self.file_name, self.theta_arr, self.r_arr, self.i_arr = get_values(data_frame)
         self.x_arr, self.y_arr = polar2cartesian(self.theta_arr, self.r_arr)
         self.pattern = r"(\w+)\.(\d+)\.(\d+)\.(\w+)X(\d+)Y(\d+)_leddar(\d+)\.lvm"
+        self.pattern2 = r"(\w+)\.(\d+)\.(\d+)\.(\w+)\.(\w+)X(\d+)Y(\d+)_leddar(\d+)\.lvm"
         self.obj_x, self.obj_y, self.leddar, self.identifier = self.split_file_name(self.file_name)
     
     def split_file_name(self, pattern):
         # Use re.match to find the pattern
         match = re.match(self.pattern, self.file_name)
+        match2 = re.match(self.pattern2, self.file_name)
 
         if match:
-            shape, day, month, grid_identifier, x, y, leddar = match.groups()
+            shape, day, month, identifier, x, y, leddar = match.groups()
             if leddar == '1':
                 leddar = 'Left'
             elif leddar == '2':
                 leddar = 'Right'
             else:
                 leddar = 'Unknown'
+        elif match2:
+            shape, day, month, identifier_a, identifier_b, x, y, leddar = match2.groups()
+            identifier = identifier_a + '.' + identifier_b
+            if leddar == '1':
+                leddar = 'Left'
+            elif leddar == '2':
+                leddar = 'Right'
+            else:
+                leddar = 'Unknown'
+        else:
+            shape = day = month = identifier = x = y = leddar = None
         
-            return x, y, leddar, identifier
+        return x, y, leddar, identifier
 
 
 
