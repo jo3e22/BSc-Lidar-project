@@ -15,6 +15,9 @@ def correct_zeros(data):
     '''
     data.loc[data['i'] == 0, 'r'] = 10000
 
+def correct_origin(data):
+    data['x_origin'] += 50
+
 def cartesian_plot(data):
     '''
     This function plots the data in cartesian coordinates.
@@ -34,10 +37,25 @@ def extract_obj(file):
     obj = str(file).split('.')[-3:-1]
     return obj
 
+def plot_background(ax, data):
+    x = [370, 480, 590, 700, 810, 920, 1030, 1140]
+    y = [330, 480, 630, 780, 930, 1080, 1305, 1520]
+    room = np.zeros((1545, 1520))
+
+    for i in x:
+        for j in y:
+            ax.plot(i, j, '+', color='grey')
+    ax.plot(data['x_origin'][0], 0, 'o', color = 'blue')
+    ax.plot(data['x_origin'][17], 0, 'o', color = 'blue')
+    ax.axvline(x=223, color = 'grey', linestyle='dotted')
+
 def read_file(file):
     fig, ax = plt.subplots(figsize = (10, 10))
     data = pd.read_csv(os.path.join(csv_folder, file))
+    correct_origin(data)
     correct_zeros(data)
+
+    plot_background(ax, data)
 
     obj = extract_obj(file)
     x, y = cartesian_plot(data)
