@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import math as math
 
 # Read in the data
 csv_folder = 'csv_folder'
@@ -14,6 +15,12 @@ def correct_zeros(data):
     output: None
     '''
     data.loc[data['i'] == 0, 'r'] = 10000
+
+def normalise_intensities(data):
+    data['i'] = data['i'] * ((2*data['r'])**2)
+    data['i'] = data['i'] / data['i'].max()
+    data['i'] = data['i'] * 255
+    #print(f'min > 0: {data[data["i"]>0]["i"].min()}, max: {data["i"].max()}')
 
 def correct_origin(data):
     data['x_origin'] += 50
@@ -48,26 +55,74 @@ def plot_background(ax, data):
     ax.plot(data['x_origin'][0], 0, 'o', color = 'blue')
     ax.plot(data['x_origin'][17], 0, 'o', color = 'blue')
     ax.axvline(x=223, color = 'grey', linestyle='dotted')
+    ax.axvline(x=1543, color = 'grey', linestyle='dotted')
+    ax.axhline(y=1520, color = 'grey', linestyle='dotted')
+
+def create_detector_mask(data, height, width):
+    theta = data['theta (rad)']
+    mask = np.zeros((width, height))
+    start_angle = theta-np.deg2rad(1.5)
+    end_angle = theta+np.deg2rad(1.5)
+    distance = data['r']
+    x_origin = data['x_origin']
+    y_origin = data['y_origin']
+    
+    mask1 = np.copy(mask)
+    for d in range(0, 16):
+        mask1 += create_binary_mask((x_origin[d], y_origin[d]), distance[d], start_angle[d], end_angle[d], (width, height), data['i'][d])
+    mask2 = np.copy(mask)
+    for d in range(16, 32):
+        mask2 += create_binary_mask((x_origin[d], y_origin[d]), distance[d], start_angle[d], end_angle[d], (width, height), data['i'][d])
+    #mask[(mask1 > 0) & (mask2 > 0)] = mask1[(mask1 > 0) & (mask2 > 0)] + mask2[(mask1 > 0) & (mask2 > 0)]
+    #mask = mask1 + mask2
+    #mask = 255-mask
+    mask[(mask1 + mask2 > 0)] = 255
+    return mask
+
+def create_binary_mask(origin, radius, start_angle, end_angle, image_size, intensity):
+    mask = np.zeros(image_size, dtype=np.uint8)
+    y, x = np.ogrid[:image_size[0], :image_size[1]]
+    distance_from_origin = np.sqrt((x - origin[0])**2 + (y - origin[1])**2)
+    angle_from_origin = np.arctan2(y - origin[1], x - origin[0])
+    angle_from_origin = (angle_from_origin + 2 * np.pi) % (2 * np.pi)
+    '''mask[(distance_from_origin >= radius-10) & 
+         (distance_from_origin <= radius+10) &
+         (angle_from_origin >= start_angle) & 
+         (angle_from_origin <= end_angle)] = (intensity)'''
+    mask[(distance_from_origin <= radius) & 
+         (angle_from_origin >= start_angle) & 
+         (angle_from_origin <= end_angle)] = 1  #(intensity)+10
+    return mask
 
 def read_file(file):
-    fig, ax = plt.subplots(figsize = (10, 10))
+    fig, ax = plt.subplots(1, 2, figsize = (15, 30))
     data = pd.read_csv(os.path.join(csv_folder, file))
     correct_origin(data)
     correct_zeros(data)
+    normalise_intensities(data)
 
-    plot_background(ax, data)
-
+    mask = create_detector_mask(data, 1545, 1550)
+    binary_mask = np.zeros_like(mask)
+    binary_mask[mask > 0] = 1 
     obj = extract_obj(file)
-    x, y = cartesian_plot(data)
+    ax[0].imshow(mask, cmap = 'gray', origin = 'lower')
+    ax[0].scatter(int(obj[0]), int(obj[1]), c = 'red', s = 50)
+    ax[0].set_aspect('equal')
+    ax[0].axis('off')
+    plot_background(ax[0], data)
 
-    ax.scatter(int(obj[0]), int(obj[1]), c = 'red', s = 50)
-    ax.plot([data['x_origin'], x], [data['y_origin'], y], color = 'gray', linewidth = 0.5)
-    ax.scatter(x, y, c = data['i'], cmap = 'viridis', s = 10)
-    ax.set_title(file)
-    ax.set_ylim(0, 1520)
-    ax.set_xlim(0, 1545)
+    plot_background(ax[1], data)
+    x, y = cartesian_plot(data)
+    ax[1].scatter(int(obj[0]), int(obj[1]), c = 'red', s = 50)
+    ax[1].plot([data['x_origin'], x], [data['y_origin'], y], color = 'gray', linewidth = 0.5)
+    ax[1].scatter(x, y, c = data['i'], cmap = 'viridis', s = 10)
+    ax[1].set_title(file)
+    ax[1].set_ylim(0, 1550)
+    ax[1].set_xlim(0, 1545)
+    ax[1].set_aspect('equal')
+    ax[1].axis('off')
     plt.show()
 
 file = files[310]
-for file in files[-70:-10]:
+for file in files[-19:-18]:
     read_file(file)

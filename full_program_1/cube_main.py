@@ -6,7 +6,8 @@ import pandas as pd
 import os as os
 
 directory = "C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/data_folder"
-folder_path = "C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/Code/csv_folder"
+#folder_path = "C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/Code/csv_folder"
+folder_path = "C:/Users/james/OneDrive/Desktop/lidar_code/csv_folder"
 data_frames = init.get_dataframes(directory, 'cube', False)
 centre_of_lidars = 685
 
