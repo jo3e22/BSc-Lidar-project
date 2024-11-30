@@ -136,31 +136,26 @@ for file in files[-14:-1]:
     fig, ax = plt.subplots(1, 2, figsize = (15, 30))
     plot(data, ax)
 
-    segments = walls.find_segment(data[['x', 'y', 'i']].values, epsilon=20)
-
-    for segment in segments:
-        print(f'segment: {segment}')
-    connected_segments = walls.join_connected_segments(segments)
-    print('\n\n')
-
-    for connected_segment in connected_segments:
-        print(f'connected_segment: {connected_segment}')
-    print('\n\n')
-  
-    '''
-    for connected_segment in connected_segments:
-        x_arr = [x for (x, y) in connected_segment]
-        y_arr = [y for (x, y)  in connected_segment]
-        a, b = walls.best_fit(x_arr, y_arr)
-        y_fit = [a + b * x for x in x_arr]
-        ax[1].plot(x_arr, y_fit, color = 'blue')
+    segments = walls.find_segment(data[['x', 'y', 'i']].values, epsilon=30)
+    segments_slopes = []
     
     for segment in segments:
         x_arr = [x for (x, y) in segment]
         y_arr = [y for (x, y) in segment]
         a, b = walls.best_fit(x_arr, y_arr)
         y_fit = [a + b * x for x in x_arr]
-        ax[1].plot(x_arr, y_fit, color = 'red')'''
+        ax[1].plot(x_arr, y_fit, color = 'red', linewidth = 1)
+        segments_slopes.append(b)
+
+    connected_segments = walls.combine_lists_of_tuples_b(segments, segments_slopes)
+
+    for connected_segment in connected_segments:
+        x_arr = [x for (x, y) in connected_segment]
+        y_arr = [y for (x, y) in connected_segment]
+        a, b = walls.best_fit(x_arr, y_arr)
+        y_fit = [a + b * x for x in x_arr]
+        ax[0].plot(x_arr, y_fit, color = 'blue', linewidth = 1)
+    
 
 
     plt.show()
