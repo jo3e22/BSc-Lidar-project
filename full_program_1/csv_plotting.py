@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import math as math
+import walls as walls
 
 # Read in the data
 csv_folder = 'csv_folder'
@@ -25,7 +26,7 @@ def normalise_intensities(data):
 def correct_origin(data):
     data['x_origin'] += 50
 
-def cartesian_plot(data):
+def add_xy(data):
     '''
     This function plots the data in cartesian coordinates.
     input: data - the data to be plotted
@@ -33,7 +34,8 @@ def cartesian_plot(data):
     '''
     x = data['x_origin'] + data['r'] * np.cos(data['theta (rad)'])
     y = data['r'] * np.sin(data['theta (rad)'])
-    return x, y
+    data['x'] = x
+    data['y'] = y
 
 def extract_obj(file):
     '''
@@ -94,13 +96,7 @@ def create_binary_mask(origin, radius, start_angle, end_angle, image_size, inten
          (angle_from_origin <= end_angle)] = 1  #(intensity)+10
     return mask
 
-def read_file(file):
-    fig, ax = plt.subplots(1, 2, figsize = (15, 30))
-    data = pd.read_csv(os.path.join(csv_folder, file))
-    correct_origin(data)
-    correct_zeros(data)
-    normalise_intensities(data)
-
+def plot(data, ax):
     mask = create_detector_mask(data, 1545, 1550)
     binary_mask = np.zeros_like(mask)
     binary_mask[mask > 0] = 1 
@@ -112,7 +108,7 @@ def read_file(file):
     plot_background(ax[0], data)
 
     plot_background(ax[1], data)
-    x, y = cartesian_plot(data)
+    x, y = data['x'], data['y']
     ax[1].scatter(int(obj[0]), int(obj[1]), c = 'red', s = 50)
     ax[1].plot([data['x_origin'], x], [data['y_origin'], y], color = 'gray', linewidth = 0.5)
     ax[1].scatter(x, y, c = data['i'], cmap = 'viridis', s = 10)
@@ -121,8 +117,50 @@ def read_file(file):
     ax[1].set_xlim(0, 1545)
     ax[1].set_aspect('equal')
     ax[1].axis('off')
-    plt.show()
+
+def read_file(file):
+    data = pd.read_csv(os.path.join(csv_folder, file))
+    correct_origin(data)
+    correct_zeros(data)
+    normalise_intensities(data)
+    add_xy(data)
+
+    return data
+
+
 
 file = files[310]
-for file in files[-19:-18]:
-    read_file(file)
+for file in files[-14:-1]:
+    data = read_file(file)
+
+    fig, ax = plt.subplots(1, 2, figsize = (15, 30))
+    plot(data, ax)
+
+    segments = walls.find_segment(data[['x', 'y', 'i']].values, epsilon=20)
+
+    for segment in segments:
+        print(f'segment: {segment}')
+    connected_segments = walls.join_connected_segments(segments)
+    print('\n\n')
+
+    for connected_segment in connected_segments:
+        print(f'connected_segment: {connected_segment}')
+    print('\n\n')
+  
+    '''
+    for connected_segment in connected_segments:
+        x_arr = [x for (x, y) in connected_segment]
+        y_arr = [y for (x, y)  in connected_segment]
+        a, b = walls.best_fit(x_arr, y_arr)
+        y_fit = [a + b * x for x in x_arr]
+        ax[1].plot(x_arr, y_fit, color = 'blue')
+    
+    for segment in segments:
+        x_arr = [x for (x, y) in segment]
+        y_arr = [y for (x, y) in segment]
+        a, b = walls.best_fit(x_arr, y_arr)
+        y_fit = [a + b * x for x in x_arr]
+        ax[1].plot(x_arr, y_fit, color = 'red')'''
+
+
+    plt.show()
