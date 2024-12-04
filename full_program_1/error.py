@@ -91,7 +91,7 @@ def run(data, object, ax):
 
     data_diff = distances(data, james, ax)
     local_data['r_diff'] = data_diff
-    #ax.imshow(james, cmap = 'gray', origin = 'lower')
+    ax.imshow(james, cmap = 'gray', origin = 'lower')
 
-    #print(local_data)
+    print(local_data)
     return local_data['r_diff']

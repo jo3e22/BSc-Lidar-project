@@ -141,18 +141,22 @@ def read_file(file):
 
 #file = files[310]
 differences = []
-for file in files[0:20]:
+for i in range(0, len(files), 10):
+    file = files[i]
     data = read_file(file)
+    file_name = str(file).strip('.csv')
 
-    #fig, ax = plt.subplots(1, 2, figsize = (30, 15))
-    #plot(data, ax)
+    fig, ax = plt.subplots(1, 2, figsize = (30, 15))
+    plot(data, ax)
     obj = extract_obj(file)
-    r_diff = error.run(data, obj, ax = None)
-    r_d = r_diff[r_diff > 0]
-    r_d_n = r_diff[r_diff < 0]
-    differences.append(r_d)
-    differences.append(r_d_n)
-    #print(f'file: {file}, r_diff: {r_diff}')
+    print(f'obj: {obj}')
+    r_diff = error.run(data, obj, ax[1])
+
+    plt.show()
+
+
+
+
 
     '''
     segments = walls.find_segment(data[['x', 'y', 'i']].values, epsilon=20)
@@ -181,22 +185,6 @@ for file in files[0:20]:
         a, b = walls.best_fit(x_arr, y_arr)
         y_fit = [a + b * x for x in x_arr]
         ax[1].plot(x_arr, y_fit, color = 'red')
-    '''
+    
     #plt.show()
-
-#plot a histogram of the differences
-differences = np.concatenate(differences)
-differences = np.sort(differences)
-differences_included = differences[0:-1]
-print(differences)
-count, bins, ignored = plt.hist(differences, bins = 50, density = True, alpha = 0.6, color='g')
-
-mu, std = norm.fit(differences_included)
-
-xmin, xmax = plt.xlim()
-x = np.linspace(xmin, xmax, 300)
-p = norm.pdf(x, mu, std)
-plt.plot(x, p, 'k', linewidth=2)
-title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
-plt.title(title)
-plt.show()
+'''

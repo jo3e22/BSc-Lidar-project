@@ -41,15 +41,6 @@ class File_Data:
         
         return x, y, leddar, identifier, pair_label
 
-
-
-
-
-
-
-
-
-
 def get_values(data_frame, offset=0):
     df = data_frame
     file_name = df.attrs['filename']
