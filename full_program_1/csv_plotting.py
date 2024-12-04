@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math as math
 import walls as walls
+import error as error
+from scipy.stats import norm
 
 # Read in the data
 csv_folder = 'csv_folder'
@@ -76,9 +78,10 @@ def create_detector_mask(data, height, width):
     for d in range(16, 32):
         mask2 += create_binary_mask((x_origin[d], y_origin[d]), distance[d], start_angle[d], end_angle[d], (width, height), data['i'][d])
     #mask[(mask1 > 0) & (mask2 > 0)] = mask1[(mask1 > 0) & (mask2 > 0)] + mask2[(mask1 > 0) & (mask2 > 0)]
-    #mask = mask1 + mask2
-    #mask = 255-mask
-    mask[(mask1 + mask2 > 0)] = 255
+    mask = mask1 + mask2
+    mask =np.clip(mask, 0, 3)
+
+    #mask[(mask1 + mask2 > 0)] = 255
     return mask
 
 def create_binary_mask(origin, radius, start_angle, end_angle, image_size, intensity):
@@ -91,9 +94,15 @@ def create_binary_mask(origin, radius, start_angle, end_angle, image_size, inten
          (distance_from_origin <= radius+10) &
          (angle_from_origin >= start_angle) & 
          (angle_from_origin <= end_angle)] = (intensity)'''
+
+    if intensity > 0:
+        i_value = 3
+    else:
+        i_value = 1
+
     mask[(distance_from_origin <= radius) & 
          (angle_from_origin >= start_angle) & 
-         (angle_from_origin <= end_angle)] = 1  #(intensity)+10
+         (angle_from_origin <= end_angle)] = i_value  #(intensity)+10
     return mask
 
 def plot(data, ax):
@@ -103,6 +112,7 @@ def plot(data, ax):
     obj = extract_obj(file)
     ax[0].imshow(mask, cmap = 'gray', origin = 'lower')
     ax[0].scatter(int(obj[0]), int(obj[1]), c = 'red', s = 50)
+    #ax[0].plot([int(obj[0])-25, int(obj[0])+25], [int(obj[1]), int(obj[1])], color = 'red', linewidth = 10)
     ax[0].set_aspect('equal')
     ax[0].axis('off')
     plot_background(ax[0], data)
@@ -129,13 +139,22 @@ def read_file(file):
 
 
 
-file = files[310]
-for file in files[-14:-1]:
+#file = files[310]
+differences = []
+for file in files[0:20]:
     data = read_file(file)
 
-    fig, ax = plt.subplots(1, 2, figsize = (15, 30))
-    plot(data, ax)
+    #fig, ax = plt.subplots(1, 2, figsize = (30, 15))
+    #plot(data, ax)
+    obj = extract_obj(file)
+    r_diff = error.run(data, obj, ax = None)
+    r_d = r_diff[r_diff > 0]
+    r_d_n = r_diff[r_diff < 0]
+    differences.append(r_d)
+    differences.append(r_d_n)
+    #print(f'file: {file}, r_diff: {r_diff}')
 
+    '''
     segments = walls.find_segment(data[['x', 'y', 'i']].values, epsilon=20)
 
     for segment in segments:
@@ -147,9 +166,10 @@ for file in files[-14:-1]:
         print(f'connected_segment: {connected_segment}')
     print('\n\n')
   
-    '''
+    
     for connected_segment in connected_segments:
-        x_arr = [x for (x, y) in connected_segment]
+        print(connected_segment)
+        x_arr = [x for [x, y] in connected_segment]
         y_arr = [y for (x, y)  in connected_segment]
         a, b = walls.best_fit(x_arr, y_arr)
         y_fit = [a + b * x for x in x_arr]
@@ -160,7 +180,23 @@ for file in files[-14:-1]:
         y_arr = [y for (x, y) in segment]
         a, b = walls.best_fit(x_arr, y_arr)
         y_fit = [a + b * x for x in x_arr]
-        ax[1].plot(x_arr, y_fit, color = 'red')'''
+        ax[1].plot(x_arr, y_fit, color = 'red')
+    '''
+    #plt.show()
 
+#plot a histogram of the differences
+differences = np.concatenate(differences)
+differences = np.sort(differences)
+differences_included = differences[0:-1]
+print(differences)
+count, bins, ignored = plt.hist(differences, bins = 50, density = True, alpha = 0.6, color='g')
 
-    plt.show()
+mu, std = norm.fit(differences_included)
+
+xmin, xmax = plt.xlim()
+x = np.linspace(xmin, xmax, 300)
+p = norm.pdf(x, mu, std)
+plt.plot(x, p, 'k', linewidth=2)
+title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
+plt.title(title)
+plt.show()
