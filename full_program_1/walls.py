@@ -34,13 +34,14 @@ def join_connected_segments0(segments_input, b_input):
         for j in range(i+1, len(segments)):
             if segments[j] not in connected_segment and np.abs(b[i] - b[j]) < 0.3:
                 test = []
-                combined = np.array(segments[i]) + np.array(segments[j])
-                for element in combined:
-                    if not any(np.array_equal(element, test) for test in connected_segments):
-                        test.append(element)
+                combined = np.concatenate((segments[i], segments[j]))
+                #print(f'Combined test: {combined}')
+                for (x, y) in combined:
+                    if (x, y) not in test:
+                        test.append((x, y))
                 if len(test) < len(combined):
                     connected_segment += segments[j]
-                    print(f'Connected segment test: {segments[j]}')
+                    #print(f'Connected segment test: {segments[j]}')
         connected_segments.append(connected_segment)
         connected_segment = []
     
