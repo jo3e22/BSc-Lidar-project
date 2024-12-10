@@ -73,7 +73,7 @@ def distances(data, james, ax):
             distances_arr.append(np.mean(front_faces))
             diff_arr.append(np.mean(diff))
             data_diff[i] = np.mean(diff)
-            
+            '''
             plt.imshow(mask, cmap = 'gray', origin = 'lower')
             plt.plot(data['x_origin'][i], data['y_origin'][i], 'ro')
             x = data['x_origin'][i]
@@ -84,6 +84,7 @@ def distances(data, james, ax):
                     [y + distance * np.sin(mid_angle_rad-np.deg2rad(1.5)), y + distance * np.sin(mid_angle_rad+np.deg2rad(1.5))], 
                     linestyle='dotted', color='red')
             plt.show()
+            '''
 
     '''
     for i in range(len(r_arr)):

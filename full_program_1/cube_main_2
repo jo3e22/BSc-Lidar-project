@@ -54,8 +54,6 @@ def extract_obj(file, fixing = False):
     else:
         obj = file_name[-3:-1]
 
-    print(f'file: {file}, obj: {obj}')
-
     if fixing == True:
         if int(obj[0]) not in x:
             print(f'error in x value for {file}')
@@ -198,8 +196,10 @@ def plot_hist_simple(differences, ax, limit = 100, extras = False):
         ax.axvline(-limit, color='black', linestyle='dashed', linewidth=1)
         ax.legend()
 
+    return mu, std
+
 def analise(folder, file, data, obj):
-    print(f'folder: {folder} \nfile: {file} \ndifferences: {folder_diffs}\n\n')
+    print(f'folder: {folder} \nfile: {file} \ndifferences: {file_diffs}\n\n')
     fig, ax = plt.subplots(1, 2, figsize = (30, 15))
     _ = error.run(data, obj, ax[1])
     plot(data, ax[0], ax[1])
@@ -208,58 +208,60 @@ def analise(folder, file, data, obj):
 
 
 
+results = []
+for offset in [0, 2.5, 5, 7.5]:
+    for folder in csv_folders:
+        fig, ax = plt.subplots(1, 2, figsize = (30, 15))
+        value_range = np.linspace(0, 30, 90)
 
-super_diffs = []
-for folder in csv_folders:
-    fig, ax = plt.subplots(1, 2, figsize = (30, 15))
-    value_range = np.linspace(0, 30, 90)
+        differences = []
+        files = os.listdir(folder)
+        new_files = []
+        for file in files:
+            if '.csv.csv' not in file:
+                new_files.append(file)
+                
+        for i in range(len(new_files)):
+            file_diffs = []
+            file = new_files[i]
 
-    differences = []
-    files = os.listdir(folder)
-    for i in range(len(files)):
-        folder_diffs = []
-        file = files[i]
+            data = pd.read_csv(os.path.join(folder, file))
+            file_name = str(file).strip('.csv')
+            obj = extract_obj(file)
 
-        data = pd.read_csv(os.path.join(folder, file))
-        file_name = str(file).strip('.csv')
-        obj = extract_obj(file)
+            data.loc[0:15, 'theta (rad)'] = data.loc[0:15, 'theta (rad)'] + np.deg2rad(offset)
+            data.loc[16:32, 'theta (rad)'] = data.loc[16:32, 'theta (rad)'] - np.deg2rad(offset)
 
-        for diff in data['r_diff']:
-            diff = np.nan_to_num(diff, nan=0.0)
- 
-            diff = int(diff*10000)
-            diff = diff/10000
+            errors = error.run(data, obj, ax[1])
 
-            if diff != 0:
-                folder_diffs.append(diff)
-                differences.append(diff)
-                super_diffs.append(diff)
-        
-        folder_mean = np.mean(folder_diffs)
-        value = np.abs(folder_mean)
-        # Normalize the value to be between 0 and 1 for colormap
-        normalized_value = (value - min(value_range)) / (max(value_range) - min(value_range))
-        color = plt.cm.YlOrRd(normalized_value)
-        ax[0].plot(int(obj[0]), int(obj[1]), 'o', color = color, markersize = 20)
-        ax[0].text(int(obj[0])-20, int(obj[1])-10, f'{folder_mean:.0f}', fontsize=12, ha='right', va='bottom', color='black')
+            for diff in errors:
+                diff = np.nan_to_num(diff, nan=0.0)
+    
+                diff = int(diff*10000)
+                diff = diff/10000
 
-        #if value > 20:
-            #analise(folder, file, data, obj)
+                if diff != 0:
+                    file_diffs.append(diff)
+                    differences.append(diff)
             
-    plot_background(ax[0], data)
-    ax[0].set_xlim(0, 1545)
-    ax[0].set_ylim(0, 1550)
-    ax[0].set_title(folder)
+            file_mean = np.mean(file_diffs)
+            value = np.abs(file_mean)
+            # Normalize the value to be between 0 and 1 for colormap
+            normalized_value = (value - min(value_range)) / (max(value_range) - min(value_range))
+            color = plt.cm.YlOrRd(normalized_value)
+            ax[0].plot(int(obj[0]), int(obj[1]), 'o', color = color, markersize = 20)
+            ax[0].text(int(obj[0])-20, int(obj[1])-10, f'{file_mean:.0f}', fontsize=12, ha='right', va='bottom', color='black')
 
-    plot_hist_simple(differences, ax[1], limit = 1000, extras = True)
-    fig.suptitle(folder)
-    plt.show()
+            #if value > 20:
+                #analise(folder, file, data, obj)
+                
+        plot_background(ax[0], data)
+        ax[0].set_xlim(0, 1545)
+        ax[0].set_ylim(0, 1550)
+        ax[0].set_title(folder)
 
+        mu, std = plot_hist_simple(differences, ax[1], limit = 1000, extras = True)
+        fig.suptitle(folder)
+        plt.show()
 
-
-'''
-fig, ax = plt.subplots(1, 1, figsize = (30, 15))
-plot_hist_simple(super_diffs, ax)
-fig.suptitle('All')
-plt.show()
-'''
+        results.append([folder, mu, std])
