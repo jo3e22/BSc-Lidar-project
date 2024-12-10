@@ -73,6 +73,17 @@ def distances(data, james, ax):
             distances_arr.append(np.mean(front_faces))
             diff_arr.append(np.mean(diff))
             data_diff[i] = np.mean(diff)
+            
+            plt.imshow(mask, cmap = 'gray', origin = 'lower')
+            plt.plot(data['x_origin'][i], data['y_origin'][i], 'ro')
+            x = data['x_origin'][i]
+            y = data['y_origin'][i]
+            mid_angle_rad = data['theta (rad)'][i]
+            distance = data['r'][i]
+            plt.plot([x + distance * np.cos(mid_angle_rad-np.deg2rad(1.5)), x + distance * np.cos(mid_angle_rad+np.deg2rad(1.5))], 
+                    [y + distance * np.sin(mid_angle_rad-np.deg2rad(1.5)), y + distance * np.sin(mid_angle_rad+np.deg2rad(1.5))], 
+                    linestyle='dotted', color='red')
+            plt.show()
 
     '''
     for i in range(len(r_arr)):
@@ -91,7 +102,7 @@ def run(data, object, ax):
 
     data_diff = distances(data, james, ax)
     local_data['r_diff'] = data_diff
-    ax.imshow(james, cmap = 'gray', origin = 'lower')
+    #ax.imshow(james, cmap = 'gray', origin = 'lower')
 
-    print(local_data)
+    #print(local_data)
     return local_data['r_diff']
