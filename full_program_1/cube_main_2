@@ -9,8 +9,8 @@ from scipy.stats import norm
 
 # Read in the data
 directory = 'C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/Code/fixed_coordinates'
-csv_folders = ['grid_data_only', '24offset_data_only', '29offset_data_only', '90sep_data_only', '90sep24offset_data_only']
-#csv_folders = ['grid_data_only']
+#csv_folders = ['grid_data_only', '24offset_data_only', '29offset_data_only', '90sep_data_only', '90sep24offset_data_only']
+csv_folders = ['24offset_data_only']
 
 def correct_zeros(data):
     '''
@@ -49,7 +49,12 @@ def extract_obj(file, fixing = False):
     x = [0, 370, 480, 590, 700, 810, 920, 1030, 1140]
     y = [0, 165, 330, 480, 630, 780, 930, 1080, 1300, 1520]
     file_name = str(file).split('.')
-    obj = file_name[-3:-1]
+    if file_name[-2] == 'csv':
+        obj = file_name[-4:-2]
+    else:
+        obj = file_name[-3:-1]
+
+    print(f'file: {file}, obj: {obj}')
 
     if fixing == True:
         if int(obj[0]) not in x:
@@ -246,7 +251,7 @@ for folder in csv_folders:
     ax[0].set_ylim(0, 1550)
     ax[0].set_title(folder)
 
-    plot_hist_simple(differences, ax[1], limit = 2000, extras = True)
+    plot_hist_simple(differences, ax[1], limit = 1000, extras = True)
     fig.suptitle(folder)
     plt.show()
 
