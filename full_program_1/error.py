@@ -11,6 +11,8 @@ def create_ellipse_mask(width, depth, center_x, center_y, grid_size):
 
     # Calculate the mask
     mask = ((x - center_x)**2 / width**2 + (y - (center_y))**2 / depth**2 <= 1).astype(int)
+    mask[:, 0:center_x-25] = 0
+    mask[:, center_x+25:-1] = 0
     
     return mask
 
@@ -35,6 +37,31 @@ def detector_mask(data, width, height):
         mask_array.append(det_mask)
     
     return mask_array
+
+def detector_mask2(angle_offset, x_origin, y_origin, radius=3000):
+    mask_list = []
+    mask = np.zeros((1545, 1545))
+    theta = np.linspace(135, 45, (91))
+    theta = np.deg2rad(theta)
+    start_angle = theta-np.deg2rad(0.5)
+    end_angle = theta+np.deg2rad(0.5)
+
+    for i in range(len(theta)):
+        det_mask = np.zeros_like(mask)
+        det_mask += create_binary_mask((x_origin, y_origin), radius, start_angle[i], end_angle[i], (1545, 1545), 1)
+        mask_list.append({'theta (rad)': theta[i], 'mask': det_mask})
+    
+    mask_data = pd.DataFrame(mask_list)
+    return mask_data
+
+def angles_to_origin(obj, x_origin, y_origin):
+    x_left = obj[0] - 25
+    x_right = obj[0] + 25
+    angle_left = np.arctan2(obj[1] - y_origin, x_left - x_origin)
+    angle_right = np.arctan2(obj[1] - y_origin, x_right - x_origin)
+    angles = [angle_left, angle_right]
+    np.sort(angles)
+    return angles
 
 def create_binary_mask(origin, radius, start_angle, end_angle, image_size, intensity):
     mask = np.zeros(image_size, dtype=np.uint8)
@@ -107,3 +134,49 @@ def run(data, object, ax):
 
     #print(local_data)
     return local_data['r_diff']
+
+def run2(object_list, data, testing_objs = False):
+    obj_mask_arr = []
+    #for obj in object_list:
+     #   james = create_ellipse_mask(40, 15, int(obj[0]), int(obj[1]), 1545)
+      #  obj_mask_arr.append(james)
+      
+    left_mask_data = detector_mask2(0, data['x_origin'][0], data['y_origin'][0])
+    right_mask_data = detector_mask2(0, data['x_origin'][17], data['y_origin'][17])
+
+    for obj in object_list:
+        l_angles = angles_to_origin(obj, data['x_origin'][0], data['y_origin'][0])
+        l_start = min(l_angles)
+        l_end = max(l_angles)
+        r_angles = angles_to_origin(obj, data['x_origin'][17], data['y_origin'][17])
+        r_start = min(r_angles)
+        r_end = max(r_angles)
+        james = create_ellipse_mask(40, 15, int(obj[0]), int(obj[1]), 1545)
+
+        if testing_objs:
+            plt.plot(data['x_origin'][0], data['y_origin'][0], 'ro')
+            plt.plot(data['x_origin'][17], data['y_origin'][17], 'bo')
+            plt.plot([data['x_origin'][0], data['x_origin'][0] + 3000*np.cos(l_start)], [data['y_origin'][0], data['y_origin'][0] + 3000*np.sin(l_start)], 'r')
+            plt.plot([data['x_origin'][0], data['x_origin'][0] + 3000*np.cos(l_end)], [data['y_origin'][0], data['y_origin'][0] + 3000*np.sin(l_end)], 'r')
+            plt.plot([data['x_origin'][17], data['x_origin'][17] + 3000*np.cos(r_start)], [data['y_origin'][17], data['y_origin'][17] + 3000*np.sin(r_start)], 'b')
+            plt.plot([data['x_origin'][17], data['x_origin'][17] + 3000*np.cos(r_end)], [data['y_origin'][17], data['y_origin'][17] + 3000*np.sin(r_end)], 'b')
+
+            plt.imshow(james, cmap = 'gray', origin = 'lower')
+   
+
+        left_sub_dic = left_mask_data[(left_mask_data['theta (rad)'] >= (l_start-np.deg2rad(0.5))) & (left_mask_data['theta (rad)'] <= (l_end+np.deg2rad(0.5)))]
+        right_sub_dic = right_mask_data[(right_mask_data['theta (rad)'] >= (r_start-np.deg2rad(0.5))) & (right_mask_data['theta (rad)'] <= (r_end+np.deg2rad(0.5)))]
+
+        print(f'length of left_sub_dic: {len(left_sub_dic)}')
+        mask = np.zeros((1545, 1545))
+        for i in range(len(left_mask_data)):
+            theta = left_mask_data['theta (rad)'][i]
+            if theta >= (l_start-np.deg2rad(0.5)) and left_mask_data['theta (rad)'][i] <= (l_end+np.deg2rad(0.5)):
+                print(f'theta: {theta:.2f}, limits: {l_start-np.deg2rad(0.5):.2f}, {l_end+np.deg2rad(0.5):.2f}')
+                mask += left_mask_data['mask'][i]
+        
+        plt.imshow(mask, cmap = 'gray', origin = 'lower')
+
+        plt.xlim(0, 1545)
+        plt.ylim(0, 1545)
+        plt.show()
