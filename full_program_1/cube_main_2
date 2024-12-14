@@ -9,8 +9,8 @@ from scipy.stats import norm
 
 # Read in the data
 directory = 'C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/Code/fixed_coordinates'
-#csv_folders = ['grid_data_only', '24offset_data_only', '29offset_data_only', '90sep_data_only', '90sep24offset_data_only']
-csv_folders = ['24offset_data_only']
+csv_folders = ['grid_data_only', '24offset_data_only', '29offset_data_only', '90sep_data_only', '90sep24offset_data_only']
+#csv_folders = ['24offset_data_only']
 
 def correct_zeros(data):
     '''
@@ -208,60 +208,36 @@ def analise(folder, file, data, obj):
 
 
 
-results = []
-for offset in [0, 2.5, 5, 7.5]:
-    for folder in csv_folders:
-        fig, ax = plt.subplots(1, 2, figsize = (30, 15))
-        value_range = np.linspace(0, 30, 90)
 
-        differences = []
-        files = os.listdir(folder)
-        new_files = []
-        for file in files:
-            if '.csv.csv' not in file:
-                new_files.append(file)
+for folder in csv_folders:
+
+    folder_data = pd.DataFrame()
+
+    files = os.listdir(folder)
+    new_files = [file for file in files if '.csv.csv' not in file]
                 
-        for i in range(len(new_files)):
-            file_diffs = []
-            file = new_files[i]
+    for i, file in enumerate(new_files):
+        data = pd.read_csv(os.path.join(folder, file))
+        file_name = str(file).strip('.csv')
+        obj = extract_obj(file)
 
-            data = pd.read_csv(os.path.join(folder, file))
-            file_name = str(file).strip('.csv')
-            obj = extract_obj(file)
+        if i == 0:
+            folder_data['theta (rad)'] = data['theta (rad)']
+            folder_data['x_origin'] = data['x_origin']
+            folder_data['y_origin'] = data['y_origin']
 
-            data.loc[0:15, 'theta (rad)'] = data.loc[0:15, 'theta (rad)'] + np.deg2rad(offset)
-            data.loc[16:32, 'theta (rad)'] = data.loc[16:32, 'theta (rad)'] - np.deg2rad(offset)
+        r_string = f'r_X{obj[0]}Y{obj[1]}'
+        i_string = f'i_X{obj[0]}Y{obj[1]}'
+        x_string = f'x_X{obj[0]}Y{obj[1]}'
+        y_string = f'y_X{obj[0]}Y{obj[1]}'
+        diff_string = f'diff_X{obj[0]}Y{obj[1]}'
+        corrected_diff_string = f'corrected_diff_X{obj[0]}Y{obj[1]}'
 
-            errors = error.run(data, obj, ax[1])
+        folder_data[r_string] = data['r']
+        folder_data[i_string] = data['i']
+        folder_data[x_string] = data['x']
+        folder_data[y_string] = data['y']
+        folder_data[diff_string] = np.zeros(32)
+        folder_data[corrected_diff_string] = np.zeros(32)
 
-            for diff in errors:
-                diff = np.nan_to_num(diff, nan=0.0)
-    
-                diff = int(diff*10000)
-                diff = diff/10000
-
-                if diff != 0:
-                    file_diffs.append(diff)
-                    differences.append(diff)
-            
-            file_mean = np.mean(file_diffs)
-            value = np.abs(file_mean)
-            # Normalize the value to be between 0 and 1 for colormap
-            normalized_value = (value - min(value_range)) / (max(value_range) - min(value_range))
-            color = plt.cm.YlOrRd(normalized_value)
-            ax[0].plot(int(obj[0]), int(obj[1]), 'o', color = color, markersize = 20)
-            ax[0].text(int(obj[0])-20, int(obj[1])-10, f'{file_mean:.0f}', fontsize=12, ha='right', va='bottom', color='black')
-
-            #if value > 20:
-                #analise(folder, file, data, obj)
-                
-        plot_background(ax[0], data)
-        ax[0].set_xlim(0, 1545)
-        ax[0].set_ylim(0, 1550)
-        ax[0].set_title(folder)
-
-        mu, std = plot_hist_simple(differences, ax[1], limit = 1000, extras = True)
-        fig.suptitle(folder)
-        plt.show()
-
-        results.append([folder, mu, std])
+    folder_data.to_csv(os.path.join(folder, 'full_data.csv'))
