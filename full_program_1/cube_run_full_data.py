@@ -11,6 +11,7 @@ import re
 import time
 from typing import Any, Tuple, Union
 import inspect
+from matplotlib.markers import MarkerStyle
 
 # Read in the data
 Timing_enabled = False
@@ -95,6 +96,54 @@ def return_data(data: pd.DataFrame):
     return data_points
 
 @time_function
+def adjust_detector_masks(detector_df_input: pd.DataFrame, origin: Tuple) -> pd.DataFrame:
+    try:
+        detector_df = detector_df_input.copy()
+        x_bound = int(detector_df_input.origin_x - origin[0])
+        y_bound = int(detector_df_input.origin_y - origin[1])
+
+        detector_df['mask'] = detector_df['mask'].apply(lambda mask: mask[int(y_bound):int(y_bound+room_y), int(x_bound):int(x_bound+room_x)])
+
+        return detector_df
+    except (InputTypeError, ValueError) as e:
+        print(f"Input validation error: {e}")
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return None
+
+def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, origin: Tuple, data_points: list) -> None:
+    data = data.copy()
+    data['theta (deg)'] = data['theta (rad)'].apply(lambda x: np.rad2deg(x))
+    detector_df['theta (deg)'] = detector_df['theta (rad)'].apply(lambda x: np.rad2deg(x))
+    data.set_index('theta (deg)', inplace=True)
+    detector_df.set_index('theta (deg)', inplace=True)
+
+    results_df = pd.DataFrame()
+    results_df['theta_deg'] = data['theta (rad)'].apply(lambda x: np.rad2deg(x))
+    results_df.set_index('theta_deg', inplace=True)
+
+    for (x, y) in data_points:
+        try:
+            data_r_col = data[f'r_X{x}Y{y}']
+            data_r_col_nonzero = data_r_col[data_r_col != 10000]
+            det_col = detector_df[f'r_({x}, {y})']
+            det_col_nonzero = det_col[det_col != 0]
+
+            results_df[f'diff_{x}_{y}'] = np.zeros_like(data_r_col)
+
+            for index in det_col_nonzero.index:
+                if index in data_r_col_nonzero.index:
+                    diff = data_r_col_nonzero[index]-det_col_nonzero[index]
+                    results_df.at[index, f'diff_{x}_{y}'] = diff
+                    #print(f"diff: {np.abs(diff):.1f} Data: {data_r_col_nonzero[index]:.0f}  Detector: {det_col_nonzero[index]:.0f}")
+
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+    
+    return results_df
+
+@time_function
 def plot_background(ax_obj, data: pd.DataFrame, data_points = None, limits = True):
     x = [370, 480, 590, 700, 810, 920, 1030, 1140]
     y = [165, 330, 480, 630, 780, 930, 1080, 1300, 1520]
@@ -123,18 +172,47 @@ def plot_background(ax_obj, data: pd.DataFrame, data_points = None, limits = Tru
             label.set_horizontalalignment('right')
         ax_obj.set_yticks(y)
 
+@time_function
+def plot_diffs(ax_obj, diff_df: pd.DataFrame, data_points: list, l_r: str) -> None:
+    for (x, y) in data_points:
+        try:
+            diff_col = diff_df[f'diff_{x}_{y}']
+            diff_col_nonzero = diff_col[diff_col != 0]
+            mean_diff = np.mean(diff_col_nonzero)
+            if np.abs(mean_diff) < 30:
+                mean_diff_val = np.abs(mean_diff)/30
+            else:
+                mean_diff_val = 1
+            cmap = plt.get_cmap('YlOrRd')
+            color = cmap(mean_diff_val)
+            ax_obj.scatter(x, y, c=color, marker=MarkerStyle('o', fillstyle=f'{l_r}'), edgecolors='k', markersize=7)
+
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+
+obj_df = error.initialise_objects()
+detector_df = error.initialise_detector_masks()
 
 for filename in os.listdir(directory):
     if filename.endswith(".csv"):
-        #fig, ax = plt.subplots(figsize=(5, 5))
+        fig, ax = plt.subplots(1, 1, figsize=(12, 6))
 
         data = pd.read_csv(os.path.join(directory, filename))
         return_attributes(filename, data)
         data_points = return_data(data)
 
-        error.run2(data_points, data, True)
+        left_origin = (data['x_origin'][0], data['y_origin'][0])
+        right_origin = (data['x_origin'][17], data['y_origin'][17])
+        left_detectors_df = adjust_detector_masks(detector_df, left_origin)
+        right_detectors_df = adjust_detector_masks(detector_df, right_origin)
 
-'''
-        plot_background(ax, data, data_points, limits = bool)
+        left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False)
+        right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False)
+
+        left_diffs = compare_data(data[0:16], left_detectors_df, left_origin, data_points)
+        right_diffs = compare_data(data[16:32], right_detectors_df, right_origin, data_points)
+
+        plot_background(ax, data, data_points)
+        plot_diffs(ax, left_diffs, data_points, 'left')
+        plot_diffs(ax, right_diffs, data_points, 'right')
         plt.show()
-'''

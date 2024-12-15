@@ -4,7 +4,7 @@ import pandas as pd
 
 def create_ellipse_mask(width, depth, center_x, center_y, grid_size):
     # Create a grid of the specified size
-    y, x = np.ogrid[:grid_size, :grid_size]
+    y, x = np.ogrid[:grid_size[0], :grid_size[1]]
     center_y += 7.5
     if center_y > 1519:
         center_y = 1510
@@ -38,17 +38,19 @@ def detector_mask(data, width, height):
     
     return mask_array
 
-def detector_mask2(angle_offset, x_origin, y_origin, radius=3000):
+def detector_mask2(angle_offset, x_origin, y_origin):
+    centre = 90 + angle_offset
     mask_list = []
-    mask = np.zeros((1545, 1545))
-    theta = np.linspace(135, 45, (91))
+    mask = np.zeros((1520, 1543))
+    theta = np.linspace(centre + 22.5 + 9, centre - 22.5 - 9, (64))
+    #print(f'theta: {theta}')
     theta = np.deg2rad(theta)
-    start_angle = theta-np.deg2rad(0.5)
-    end_angle = theta+np.deg2rad(0.5)
+    start_angle = theta-np.deg2rad(1.5)
+    end_angle = theta+np.deg2rad(1.5)
 
     for i in range(len(theta)):
         det_mask = np.zeros_like(mask)
-        det_mask += create_binary_mask((x_origin, y_origin), radius, start_angle[i], end_angle[i], (1545, 1545), 1)
+        det_mask += create_binary_mask((x_origin, y_origin), start_angle[i], end_angle[i], (1520, 1543))
         mask_list.append({'theta (rad)': theta[i], 'mask': det_mask})
     
     mask_data = pd.DataFrame(mask_list)
@@ -63,7 +65,7 @@ def angles_to_origin(obj, x_origin, y_origin):
     np.sort(angles)
     return angles
 
-def create_binary_mask(origin, radius, start_angle, end_angle, image_size, intensity):
+def create_binary_mask(origin, start_angle, end_angle, image_size):
     mask = np.zeros(image_size, dtype=np.uint8)
     y, x = np.ogrid[:image_size[0], :image_size[1]]
     distance_from_origin = np.sqrt((x - origin[0])**2 + (y - origin[1])**2)
@@ -135,16 +137,71 @@ def run(data, object, ax):
     #print(local_data)
     return local_data['r_diff']
 
+def initialise_objects(x = [370, 480, 590, 700, 810, 920, 1030, 1140], y = [165, 330, 480, 630, 780, 930, 1080, 1300, 1520]):
+    objects = []
+    for i in x:
+        for j in y:
+            object_mask = create_ellipse_mask(40, 15, int(i), int(j), (1520, 1543))
+            objects.append({'co-ordinates': (i,j), 'mask': object_mask})
+    obj_df = pd.DataFrame(objects)
+    return obj_df
+
+def initialise_detector_masks():
+    mask_list = []
+    mask = np.zeros((1550, 2000))
+    theta = np.linspace(178.5, 1.5, 178)
+    theta = np.deg2rad(theta)
+    start_angle = theta-np.deg2rad(1.5)
+    end_angle = theta+np.deg2rad(1.5)
+
+    for i in range(len(theta)):
+        det_mask = np.zeros_like(mask)
+        det_mask += create_binary_mask((1000, 0), start_angle[i], end_angle[i], (1550, 2000))
+        mask_list.append({'theta (rad)': theta[i], 'mask': det_mask})
+    
+    mask_df = pd.DataFrame(mask_list)
+    mask_df.origin_x = 1000
+    mask_df.origin_y = 0
+    return mask_df
+
+def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: tuple, testing_objs = False):
+    for index in object_df.index:
+        obj = object_df['co-ordinates'][index]
+        object_mask = object_df['mask'][index]
+        mask_df[f'r_{obj}'] = np.zeros_like(mask_df['theta (rad)'])
+        angles = angles_to_origin(obj, origin[0], origin[1])
+        start = min(angles)
+        end = max(angles)
+
+        if testing_objs:
+            plt.plot(origin[0], origin[1], 'ro')
+            plt.plot([origin[0], origin[0] + 3000*np.cos(start)], [origin[1], origin[1] + 3000*np.sin(start)], 'r')
+            plt.plot([origin[0], origin[0] + 3000*np.cos(end)], [origin[1], origin[1] + 3000*np.sin(end)], 'r')
+            plt.imshow(object_mask, cmap = 'gray', origin = 'lower')
+
+        sub_data = mask_df.loc[
+            (mask_df['theta (rad)'] >= (start-np.deg2rad(1))) & 
+            (mask_df['theta (rad)'] <= (end+np.deg2rad(1)))
+            ]
+
+        for index in sub_data.index:
+            mask = mask_df['mask'][index] * object_mask
+            y, x = np.where(mask > 0)
+            distances = np.sqrt((x - origin[0])**2 + (y - origin[1])**2)
+            sorted_distances = np.sort(distances)
+            mean_distance = np.mean(sorted_distances[1:11])
+            mask_df.at[index, f'r_{obj}'] = mean_distance
+    
+    return mask_df
+
 def run2(object_list, data, testing_objs = False):
-    obj_mask_arr = []
-    #for obj in object_list:
-     #   james = create_ellipse_mask(40, 15, int(obj[0]), int(obj[1]), 1545)
-      #  obj_mask_arr.append(james)
-      
-    left_mask_data = detector_mask2(0, data['x_origin'][0], data['y_origin'][0])
-    right_mask_data = detector_mask2(0, data['x_origin'][17], data['y_origin'][17])
+    left_mask_data = detector_mask2(data.offset_angle, data['x_origin'][0], data['y_origin'][0])
+    right_mask_data = detector_mask2(data.offset_angle, data['x_origin'][17], data['y_origin'][17])
 
     for obj in object_list:
+        left_mask_data[f'r_{obj}'] = np.zeros_like(left_mask_data['theta (rad)'])
+        right_mask_data[f'r_{obj}'] = np.zeros_like(right_mask_data['theta (rad)'])
+
         l_angles = angles_to_origin(obj, data['x_origin'][0], data['y_origin'][0])
         l_start = min(l_angles)
         l_end = max(l_angles)
@@ -163,20 +220,22 @@ def run2(object_list, data, testing_objs = False):
 
             plt.imshow(james, cmap = 'gray', origin = 'lower')
    
+        left_sub_data = left_mask_data.loc[
+            (left_mask_data['theta (rad)'] >= (l_start-np.deg2rad(1))) &
+            (left_mask_data['theta (rad)'] <= (l_end+np.deg2rad(1)))
+            ]
+        right_sub_data = right_mask_data.loc[
+            (right_mask_data['theta (rad)'] >= (r_start-np.deg2rad(1))) &
+            (right_mask_data['theta (rad)'] <= (r_end+np.deg2rad(1)))
+            ]
 
-        left_sub_dic = left_mask_data[(left_mask_data['theta (rad)'] >= (l_start-np.deg2rad(0.5))) & (left_mask_data['theta (rad)'] <= (l_end+np.deg2rad(0.5)))]
-        right_sub_dic = right_mask_data[(right_mask_data['theta (rad)'] >= (r_start-np.deg2rad(0.5))) & (right_mask_data['theta (rad)'] <= (r_end+np.deg2rad(0.5)))]
+        for index in left_sub_data.index:
+            mask = left_mask_data['mask'][index] * james
+            y, x = np.where(mask > 0)
+            distances = np.sqrt((x - data['x_origin'][0])**2 + (y - data['y_origin'][0])**2)
+            sorted_distances = np.sort(distances)
+            mean_distance = np.mean(sorted_distances[1:11])
+            left_mask_data.at[index, f'r_{obj}'] = mean_distance
 
-        print(f'length of left_sub_dic: {len(left_sub_dic)}')
-        mask = np.zeros((1545, 1545))
-        for i in range(len(left_mask_data)):
-            theta = left_mask_data['theta (rad)'][i]
-            if theta >= (l_start-np.deg2rad(0.5)) and left_mask_data['theta (rad)'][i] <= (l_end+np.deg2rad(0.5)):
-                print(f'theta: {theta:.2f}, limits: {l_start-np.deg2rad(0.5):.2f}, {l_end+np.deg2rad(0.5):.2f}')
-                mask += left_mask_data['mask'][i]
-        
-        plt.imshow(mask, cmap = 'gray', origin = 'lower')
+    print(left_mask_data)
 
-        plt.xlim(0, 1545)
-        plt.ylim(0, 1545)
-        plt.show()
