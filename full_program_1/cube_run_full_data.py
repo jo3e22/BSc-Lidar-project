@@ -112,6 +112,7 @@ def adjust_detector_masks(detector_df_input: pd.DataFrame, origin: Tuple) -> pd.
         print(f"An unexpected error occurred: {e}")
         return None
 
+@time_function
 def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, origin: Tuple, data_points: list) -> None:
     data = data.copy()
     data['theta (deg)'] = data['theta (rad)'].apply(lambda x: np.rad2deg(x))
@@ -150,9 +151,10 @@ def plot_background(ax_obj, data: pd.DataFrame, data_points = None, limits = Tru
 
     for i in x:
         for j in y:
-            if data_points is not None and (i, j) in data_points:
-                ax_obj.plot(i, j, marker='o', fillstyle='none', color='black', markersize=7)
-            else:
+            #if data_points is not None and (i, j) in data_points:
+                #ax_obj.plot(i, j, marker='o', fillstyle='none', color='black', markersize=7)
+            #else:
+            if data_points is not None and (i, j) not in data_points:
                 ax_obj.plot(i, j, marker='+', color='grey', markersize=5)
 
     ax_obj.scatter(data['x_origin'][0], 0, marker='o', color = 'blue')
@@ -185,7 +187,7 @@ def plot_diffs(ax_obj, diff_df: pd.DataFrame, data_points: list, l_r: str) -> No
                 mean_diff_val = 1
             cmap = plt.get_cmap('YlOrRd')
             color = cmap(mean_diff_val)
-            ax_obj.scatter(x, y, c=color, marker=MarkerStyle('o', fillstyle=f'{l_r}'), edgecolors='k', markersize=7)
+            ax_obj.scatter(x, y, c=color, marker=MarkerStyle('o', fillstyle=f'{l_r}'), edgecolors='k', s=100)
 
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
@@ -196,6 +198,7 @@ detector_df = error.initialise_detector_masks()
 for filename in os.listdir(directory):
     if filename.endswith(".csv"):
         fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+        fig.suptitle(filename)
 
         data = pd.read_csv(os.path.join(directory, filename))
         return_attributes(filename, data)
