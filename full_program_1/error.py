@@ -162,12 +162,14 @@ def initialise_detector_masks():
     mask_df = pd.DataFrame(mask_list)
     mask_df.origin_x = 1000
     mask_df.origin_y = 0
+
     return mask_df
 
 def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: tuple, testing_objs = False):
     for index in object_df.index:
         obj = object_df['co-ordinates'][index]
         object_mask = object_df['mask'][index]
+
         mask_df[f'r_{obj}'] = np.zeros_like(mask_df['theta (rad)'])
         angles = angles_to_origin(obj, origin[0], origin[1])
         start = min(angles)

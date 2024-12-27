@@ -7,6 +7,7 @@ import math as math
 import walls as walls
 import error as error
 from scipy.stats import norm
+from scipy.stats import gaussian_kde
 import re 
 import time
 from typing import Any, Tuple, Union
@@ -99,8 +100,11 @@ def return_data(data: pd.DataFrame):
 def adjust_detector_masks(detector_df_input: pd.DataFrame, origin: Tuple) -> pd.DataFrame:
     try:
         detector_df = detector_df_input.copy()
-        x_bound = int(detector_df_input.origin_x - origin[0])
-        y_bound = int(detector_df_input.origin_y - origin[1])
+        detector_df.origin_x = detector_df_input.origin_x
+        detector_df.origin_y = detector_df_input.origin_y
+
+        x_bound = int(detector_df.origin_x - origin[0])
+        y_bound = int(detector_df.origin_y - origin[1])
 
         detector_df['mask'] = detector_df['mask'].apply(lambda mask: mask[int(y_bound):int(y_bound+room_y), int(x_bound):int(x_bound+room_x)])
 
@@ -113,7 +117,7 @@ def adjust_detector_masks(detector_df_input: pd.DataFrame, origin: Tuple) -> pd.
         return None
 
 @time_function
-def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, origin: Tuple, data_points: list) -> None:
+def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, origin: Tuple, data_points: list, ax) -> None:
     data = data.copy()
     data['theta (deg)'] = data['theta (rad)'].apply(lambda x: np.rad2deg(x))
     detector_df['theta (deg)'] = detector_df['theta (rad)'].apply(lambda x: np.rad2deg(x))
@@ -136,7 +140,10 @@ def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, origin: Tuple, d
             for index in det_col_nonzero.index:
                 if index in data_r_col_nonzero.index:
                     diff = data_r_col_nonzero[index]-det_col_nonzero[index]
+                    distance = np.sqrt((x-origin[0])**2 + (y-origin[1])**2)
                     results_df.at[index, f'diff_{x}_{y}'] = diff
+                    ax.scatter(distance, diff, marker='o', color='black')
+                    ax.set_aspect('equal')
                     #print(f"diff: {np.abs(diff):.1f} Data: {data_r_col_nonzero[index]:.0f}  Detector: {det_col_nonzero[index]:.0f}")
 
         except Exception as e:
@@ -187,35 +194,167 @@ def plot_diffs(ax_obj, diff_df: pd.DataFrame, data_points: list, l_r: str) -> No
                 mean_diff_val = 1
             cmap = plt.get_cmap('YlOrRd')
             color = cmap(mean_diff_val)
-            ax_obj.scatter(x, y, c=color, marker=MarkerStyle('o', fillstyle=f'{l_r}'), edgecolors='k', s=100)
+            ax_obj.scatter(x, y, c=color, marker=MarkerStyle('o', fillstyle=f'{l_r}'), edgecolors='k', s=200)
 
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
 
+@time_function
+def plot_hist_simple(differences, ax, limit = 100, extras = False):
+    included_diffs = []
+    for diff in differences:
+        if diff < limit and diff > -limit and diff != 0:
+            included_diffs.append(diff)
+    
+    if len(included_diffs) == len(differences):
+        limit = np.max(np.abs(included_diffs))
+    
+    x = np.linspace(limit, -limit, int((limit*2)+1))
+
+    mu, std = norm.fit(included_diffs)
+    p = norm.pdf(x, mu, std)
+    print(f'y_val of mean: {norm.pdf(mu, mu, std)}')
+    ax.hist(included_diffs, bins = 30, density = True, alpha = 0.6, color='g', label = 'histogram of differences')
+
+    #xmin, xmax = plt.xlim()
+    #x = np.linspace(xmin, xmax, (xmax-xmin))
+
+    ax.plot(x, p, 'k', linewidth=2, label = 'fit results: mu = %.2f,  std = %.2f' % (mu, std))
+
+    title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
+    ax.set_title(title)
+
+    if extras == True:
+        ax.axvline(mu, color='r', linestyle='dashed', linewidth=1, label = 'mean')
+        ax.axvline(mu-std, color='grey', linestyle='dashed', linewidth=1, label = '1 std')
+        ax.axvline(mu+std, color='grey', linestyle='dashed', linewidth=1)
+        ax.axvline(limit, color='black', linestyle='dashed', linewidth=1, label = 'limit of included values')
+        ax.axvline(-limit, color='black', linestyle='dashed', linewidth=1)
+        ax.legend()
+
+    return mu, std
+
+@time_function
+def plot_kde(differences, ax, limit = 100, extras = False):
+    differences = differences[differences != 0]
+    print(f'data_points: {len(differences)}')
+
+    included_diffs = []
+    for diff in differences:
+        if diff < limit and diff > -limit and diff != 0:
+            included_diffs.append(diff)
+    
+    if len(included_diffs) == len(differences):
+        limit = np.max(np.abs(included_diffs))
+    
+    x = np.linspace(max(differences), min(differences), 2000)
+    print(f'min and max: {min(differences)}, {max(differences)}')
+
+    x_lim_only = np.linspace(limit, -limit, (2*limit +1))
+
+    mu, std = norm.fit(included_diffs)
+    p = norm.pdf(x_lim_only, mu, std)
+    print(f'y_val of mean: {norm.pdf(mu, mu, std)}')
+    
+    kde = gaussian_kde(differences)
+    kde_vals = kde(x)
+    ax.plot(x, kde_vals, 'k', linewidth=1, label = 'fit results: mu = %.2f,  std = %.2f' % (mu, std))
+    ax.fill_between(x, kde_vals, alpha=0.5, color='g')
+
+    #ax.plot(x_lim_only, p, 'k', linewidth=2, label = 'fit results: mu = %.2f,  std = %.2f' % (mu, std))
+
+    title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
+    ax.set_title(title)
+
+    if extras == True:
+        ax.axvline(mu, color='r', linestyle='dashed', linewidth=1, label = 'mean')
+        ax.axvline(mu-std, color='grey', linestyle='dashed', linewidth=1, label = '1 std')
+        ax.axvline(mu+std, color='grey', linestyle='dashed', linewidth=1)
+        ax.axvline(limit, color='black', linestyle='dashed', linewidth=1, label = 'limit of included values')
+        ax.axvline(-limit, color='black', linestyle='dashed', linewidth=1)
+        ax.legend()
+
+    return mu, std
+
+def custom_plot(differences, ax, limit = 100):
+    differences = differences[differences != 0]
+    incl_diffs = []
+    for dif in differences:
+        if type(dif) == float:
+            incl_diffs.append(dif)
+        else:
+            print(f'Non-float value: {dif}')
+            print(f'Non-float type: {type(dif)}')
+
+    differences = np.array(incl_diffs)
+    differences = np.sort(differences)
+    q = len(differences)
+    point_volume = 1/q
+    height_count = 0
+
+    for i in range(1, len(differences)-1):
+        point = differences[i]
+        width = np.abs(differences[i+1] - differences[i-1])
+        height = point_volume/width
+        print(f'width: {width}, height: {height}')
+        ax.bar(point, height, width, align='center', alpha=0.5, color='g')
+        ax.scatter(point, height, color='black', s=5)
+        height_count += height
+
+    print(f'height count: {height_count}')
+    
+
+'''
+#if object csv and detector csv do not exist, create them
+if not os.path.exists(os.path.join(directory, 'objects.csv')):
+    obj_df = error.initialise_objects()
+    obj_df.to_csv(os.path.join(directory, 'objects.csv'))
+else:
+    obj_df = pd.read_csv(os.path.join(directory, 'objects.csv'))
+
+if not os.path.exists(os.path.join(directory, 'detectors.csv')):
+    detector_df = error.initialise_detector_masks()
+    detector_df.to_csv(os.path.join(directory, 'detectors.csv'))
+else:
+    detector_df = pd.read_csv(os.path.join(directory, 'detectors.csv'))
+    #hard coded coordinated for the origin of the detector masks because time is of the essence
+    detector_df.origin_x = 1000
+    detector_df.origin_y = 0
+    print(f"Detector mask shape: {detector_df['mask'].shape}")
+    print(f'detector mask shape: {np.array(detector_df["mask"][3]).shape}')
+'''
 obj_df = error.initialise_objects()
 detector_df = error.initialise_detector_masks()
 
+
 for filename in os.listdir(directory):
     if filename.endswith(".csv"):
-        fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+        fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
         fig.suptitle(filename)
 
         data = pd.read_csv(os.path.join(directory, filename))
         return_attributes(filename, data)
         data_points = return_data(data)
 
+
         left_origin = (data['x_origin'][0], data['y_origin'][0])
         right_origin = (data['x_origin'][17], data['y_origin'][17])
+
         left_detectors_df = adjust_detector_masks(detector_df, left_origin)
         right_detectors_df = adjust_detector_masks(detector_df, right_origin)
 
         left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False)
         right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False)
 
-        left_diffs = compare_data(data[0:16], left_detectors_df, left_origin, data_points)
-        right_diffs = compare_data(data[16:32], right_detectors_df, right_origin, data_points)
+        left_diffs = compare_data(data[0:16], left_detectors_df, left_origin, data_points, ax2)
+        right_diffs = compare_data(data[16:32], right_detectors_df, right_origin, data_points, ax2)
+        all_diffs = pd.concat([left_diffs, right_diffs], axis=1)
 
         plot_background(ax, data, data_points)
         plot_diffs(ax, left_diffs, data_points, 'left')
         plot_diffs(ax, right_diffs, data_points, 'right')
-        plt.show()
+
+        #plot_kde(all_diffs.values.flatten(), ax1, 100, False)
+        custom_plot(all_diffs.values.flatten(), ax1, 100)
+
+        plt.show()        
