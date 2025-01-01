@@ -17,7 +17,8 @@ import inspect
 
 # Read in the data
 Timing_enabled = False
-directory = 'C:/Users/james/OneDrive/Desktop/lidar_code/full_data'
+#directory = 'C:/Users/james/OneDrive/Desktop/lidar_code/full_data'
+directory = r'C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2'
 room_x = int(1543)
 room_y = int(1520)
 stage_x = int(223)
@@ -81,7 +82,8 @@ def return_attributes(filename: str, data: pd.DataFrame) -> Union[Tuple[int, int
 
 @time_function
 def return_data(data: pd.DataFrame):
-    pattern = r"^(?P<prefix>corrected_diff|r|i|x|y|diff)_X(?P<xvalue>\d+)Y(?P<yvalue>\d+)$"
+    #pattern = r"^(?P<prefix>corrected_diff|r|i|x|y|diff)_X(?P<xvalue>\d+)Y(?P<yvalue>\d+)$"
+    pattern = r"^(?P<prefix>corrected_diff_|r|i|x|y|diff_).(?P<xvalue>\d+).(?P<yvalue>\d+)$"
     data_points = []
     for column in data.columns[4::]:
         match = re.match(pattern, column)
@@ -90,7 +92,7 @@ def return_data(data: pd.DataFrame):
             x = int(match.group('xvalue'))
             y = int(match.group('yvalue'))
 
-            if (x, y) not in data_points:
+            if (x, y) not in data_points and (x, y) != (0, 0):
                 data_points.append((x, y))
         else:
             print(f'No match found for {column}')
@@ -129,14 +131,17 @@ def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, walls_df: pd.Dat
     results_df['theta_deg'] = data['theta (rad)'].apply(lambda x: np.rad2deg(x))
     results_df.set_index('theta_deg', inplace=True)
 
+    useful_data = []
+
     for (x, y) in data_points:
         try:
-            data_r_col = data[f'r_X{x}Y{y}']
+            data_r_col = data[f'r.{x}.{y}']
             data_r_col_nonzero = data_r_col[data_r_col != 10000]
             det_col = detector_df[f'r_({x}, {y})']
             det_col_nonzero = det_col[det_col != 0]
 
             results_df[f'diff_{x}_{y}'] = np.zeros_like(data_r_col)
+            results_df[f'diff_{x}_{y}'] = results_df[f'diff_{x}_{y}'].astype('float64')
 
             for index in det_col_nonzero.index:
                 if index in data_r_col_nonzero.index:
@@ -172,6 +177,7 @@ def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, walls_df: pd.Dat
     ax.set_ylabel('Difference in distance')
     ax.set_title('Difference in distance between object and detector')
     ax.set_xlim(0, 1600)
+    ax.set_ylim(ymax = 1600)
     ax.set_aspect('equal')
 
     return results_df
@@ -219,42 +225,10 @@ def plot_diffs(ax_obj, diff_df: pd.DataFrame, data_points: list, l_r: str) -> No
                 mean_diff_val = 1
             cmap = plt.get_cmap('YlOrRd')
             color = cmap(mean_diff_val)
-            ax_obj.scatter(x, y, c=color, marker=MarkerStyle('o', fillstyle=f'{l_r}'), edgecolors='k', s=200)
+            ax_obj.scatter(x, y, color=color, marker=MarkerStyle('o', fillstyle=f'{l_r}'), edgecolors='k', s=200)
 
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
-
-@time_function
-def plot_hist_simple(differences, ax, limit = 100, extras = False):
-    included_diffs = []
-    for diff in differences:
-        if diff < limit and diff > -limit and diff != 0:
-            included_diffs.append(diff)
-    
-    if len(included_diffs) == len(differences):
-        limit = np.max(np.abs(included_diffs))
-    
-    x = np.linspace(limit, -limit, int((limit*2)+1))
-
-    mu, std = norm.fit(included_diffs)
-    p = norm.pdf(x, mu, std)
-    print(f'y_val of mean: {norm.pdf(mu, mu, std)}')
-    ax.hist(included_diffs, bins = int(len(x)/5), alpha = 0.4, color='r', label = 'histogram of differences')
-
-    ax.plot(x, p, 'k', linewidth=2, label = 'fit results: mu = %.2f,  std = %.2f' % (mu, std))
-
-    title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
-    ax.set_title(title)
-
-    if extras == True:
-        ax.axvline(mu, color='r', linestyle='dashed', linewidth=1, label = 'mean')
-        ax.axvline(mu-std, color='grey', linestyle='dashed', linewidth=1, label = '1 std')
-        ax.axvline(mu+std, color='grey', linestyle='dashed', linewidth=1)
-        ax.axvline(limit, color='black', linestyle='dashed', linewidth=1, label = 'limit of included values')
-        ax.axvline(-limit, color='black', linestyle='dashed', linewidth=1)
-        ax.legend()
-
-    return mu, std
 
 @time_function
 def plot_kde(differences, ax, limit = 100, extras = False):
@@ -298,6 +272,7 @@ def plot_kde(differences, ax, limit = 100, extras = False):
 
     return mu, std
 
+@time_function
 def custom_plot(differences, ax, limit = 100):
     differences = differences[differences != 0]
     incl_diffs = []
@@ -324,21 +299,45 @@ def custom_plot(differences, ax, limit = 100):
         height_count += height
 
     print(f'height count: {height_count}')
-    
+
+@time_function    
 def custom_hist(differences, ax):
     differences = differences[differences != 0]
+    differences = differences[~np.isnan(differences)]
     differences = np.sort(differences)
+
+    if len(differences) == 0:
+        #print("No differences found, skipping histogram creation")
+        return 0, 0, 0
+
     start = differences[0]
     end = differences[-1]
-    q = len(differences)
-    print(f'q: {q}')
 
-    num_elements = int((end - start) / 5) + 1
+    if np.isnan(start) or np.isnan(end):
+        print("start or end is NaN, skipping histogram creation")
+        return 0, 0, 0
+
+    q = len(differences)
+    #print(f'q: {q}')
+
+    num_elements = int((end - start) / 2.5) + 1
     x = np.linspace(start, end, num_elements)
+    mu, std = norm.fit(differences)
+    p = norm.pdf(x, mu, std)
 
     ax.hist(differences, bins = x, density = True, alpha = 0.4, color='r', label = 'histogram of differences')
+    ax.plot(x, p, 'k', linewidth=2, label = 'fit results')
+    ax.axvline(mu, color='r', linestyle='dashed', linewidth=1, label = 'mean')
+    ax.axvline(mu-std, color='grey', linestyle='dashed', linewidth=1, label = '1 std')
+    ax.axvline(mu+std, color='grey', linestyle='dashed', linewidth=1)
+
+    title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
+    ax.set_title(title)
+    ax.legend()
     ax.set_xlabel('Difference in distance')
     ax.set_ylabel('Frequency')
+
+    return mu, std, q
 
     
 
@@ -368,9 +367,9 @@ walls_df = error.initialise_walls()
 
 
 for filename in os.listdir(directory):
-    if filename.endswith(".csv"):
-        fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
-        fig.suptitle(filename)
+    if filename.endswith("data.csv"):
+        #fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
+        #fig.suptitle(filename)
 
         data = pd.read_csv(os.path.join(directory, filename))
         return_attributes(filename, data)
@@ -389,16 +388,29 @@ for filename in os.listdir(directory):
         left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False)
         right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False)
 
-        left_diffs = compare_data(data[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
-        right_diffs = compare_data(data[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
-        all_diffs = pd.concat([left_diffs, right_diffs], axis=1)
+        print(f'\nFilename: {filename}')
+        for offset in range(-10, 11, 1):
+            fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
+            fig.suptitle(filename)
+            data_copy = data.copy()
+            
+            data_copy.loc[0:15, 'theta (rad)'] = data_copy.loc[0:15, 'theta (rad)'] + np.deg2rad(offset)
+            data_copy.loc[16:31, 'theta (rad)'] = data_copy.loc[16:31, 'theta (rad)'] - np.deg2rad(offset)
 
-        plot_background(ax, data, data_points)
-        plot_diffs(ax, left_diffs, data_points, 'left')
-        plot_diffs(ax, right_diffs, data_points, 'right')
+            left_diffs = compare_data(data_copy[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
+            right_diffs = compare_data(data_copy[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
+            all_diffs = pd.concat([left_diffs, right_diffs], axis=1)
 
-        custom_hist(all_diffs.values.flatten(), ax1)
-        custom_plot(all_diffs.values.flatten(), ax1, 100)
+            plot_background(ax, data_copy, data_points)
+            plot_diffs(ax, left_diffs, data_points, 'left')
+            plot_diffs(ax, right_diffs, data_points, 'right')
 
+            #mu, std, q = custom_hist(all_diffs.values.flatten(), ax1)
+            lmu, lstd, lq = custom_hist(left_diffs.values.flatten(), ax1)
+            rmu, rstd, rq = custom_hist(right_diffs.values.flatten(), ax1)
+            #custom_plot(all_diffs.values.flatten(), ax1, 100)
 
-        plt.show()        
+            plt.show()
+
+            #print(f'Filename: {filename}, Points: {q}, Offset: {offset}, mu: {mu}, std: {std}')
+            print(f'Offset: {offset}  |  Left Points: {lq:.1f}, Left mu: {lmu:.1f}, Left std: {lstd:.1f}  |  Right Points: {rq:.1f}, Right mu: {rmu:.1f}, Right std: {rstd:.1f}')

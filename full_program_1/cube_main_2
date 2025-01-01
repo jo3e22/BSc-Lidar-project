@@ -8,9 +8,9 @@ import error as error
 from scipy.stats import norm
 
 # Read in the data
-directory = 'C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/Code'
-sub_directory = 'C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/Code/fixed_data'
-new_folder = 'full_data'
+directory = r'C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/Code'
+sub_directory = r'C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\fixed_coordinates'
+new_folder = 'full_data2'
 csv_folders = ['grid_data_only', '24offset_data_only', '29offset_data_only', '90sep_data_only', '90sep24offset_data_only']
 
 def correct_zeros(data):
@@ -219,6 +219,9 @@ for folder in csv_folders:
     new_cols = []
 
     path = os.path.join(sub_directory, folder)
+    if not os.path.exists(path):
+        print(f"Path {path} does not exist.")
+        continue
     files = os.listdir(path)
     new_files = [file for file in files if '.csv.csv' not in file]
                 
