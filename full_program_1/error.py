@@ -176,7 +176,7 @@ def initialise_detector_masks():
 
     return mask_df
 
-def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: tuple, testing_objs = False, walls = False):
+def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: tuple, testing_objs = False, walls = False, data_df = None):
     for index in object_df.index:
         object_mask = object_df['mask'][index]
 
@@ -195,6 +195,12 @@ def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: t
             end = np.pi
 
         if testing_objs:
+            try:
+                x_data = data_df[f'x.{obj[0]}.{obj[1]}']
+                y_data = data_df[f'y.{obj[0]}.{obj[1]}']
+                plt.plot(x_data, y_data, 'ro')
+            except:
+                pass
             plt.plot(origin[0], origin[1], 'ro')
             plt.plot([origin[0], origin[0] + 3000*np.cos(start)], [origin[1], origin[1] + 3000*np.sin(start)], 'r')
             plt.plot([origin[0], origin[0] + 3000*np.cos(end)], [origin[1], origin[1] + 3000*np.sin(end)], 'r')

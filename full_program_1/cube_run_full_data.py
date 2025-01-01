@@ -368,7 +368,7 @@ walls_df = error.initialise_walls()
 
 for filename in os.listdir(directory):
     if filename.endswith("data.csv"):
-        #fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
+        fig, [ax0, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
         #fig.suptitle(filename)
 
         data = pd.read_csv(os.path.join(directory, filename))
@@ -385,11 +385,62 @@ for filename in os.listdir(directory):
         left_walls_df = error.generate_distances(walls_df, left_detectors_df, left_origin, False, True)
         right_walls_df = error.generate_distances(walls_df, right_detectors_df, right_origin, False, True)
 
-        left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False)
+        left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False, False, data)
         right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False)
 
+        left_diffs = compare_data(data[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
+        right_diffs = compare_data(data[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
+
         print(f'\nFilename: {filename}')
-        for offset in range(-10, 11, 1):
+
+        ax0.imshow(walls_df['mask'][0], cmap='grey', origin='lower')
+        ax1.imshow(walls_df['mask'][0], cmap='grey', origin='lower')
+        plot_background(ax0, data, data_points)
+        plot_background(ax1, data, data_points)
+
+        l_data_copy = data[0:16].copy()
+        l_data_copy.index = l_data_copy['theta (rad)']
+        r_data_copy = data[16:32].copy()
+        r_data_copy.index = r_data_copy['theta (rad)']
+
+        for (x, y) in data_points:
+            l_data_x = l_data_copy[f'x.{x}.{y}']
+            l_data_y = l_data_copy[f'y.{x}.{y}']
+            for index in l_data_copy.index:
+                rad_index = np.rad2deg(index)
+
+                if l_data_copy[f'r.{x}.{y}'][index] != 10000:
+                    if left_diffs[f'diff_{x}_{y}'][rad_index] == 0:
+                        ax0.scatter(l_data_x[index], l_data_y[index], c='r', marker='x')
+                    else:
+                        ax0.scatter(l_data_x[index], l_data_y[index], c='grey', marker='x')
+
+            r_data_x = r_data_copy[f'x.{x}.{y}']
+            r_data_y = r_data_copy[f'y.{x}.{y}']
+            for index in r_data_copy.index:
+                rad_index = np.rad2deg(index)
+                if r_data_copy[f'r.{x}.{y}'][index] != 10000:
+                    if right_diffs[f'diff_{x}_{y}'][rad_index] == 0:
+                        ax1.scatter(r_data_x[index], r_data_y[index], c='b', marker='x')
+                    else:
+                        ax1.scatter(r_data_x[index], r_data_y[index], c='grey', marker='x')
+
+        
+        plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+'''
+            
             fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
             fig.suptitle(filename)
             data_copy = data.copy()
@@ -414,3 +465,4 @@ for filename in os.listdir(directory):
 
             #print(f'Filename: {filename}, Points: {q}, Offset: {offset}, mu: {mu}, std: {std}')
             print(f'Offset: {offset}  |  Left Points: {lq:.1f}, Left mu: {lmu:.1f}, Left std: {lstd:.1f}  |  Right Points: {rq:.1f}, Right mu: {rmu:.1f}, Right std: {rstd:.1f}')
+'''
