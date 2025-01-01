@@ -146,6 +146,17 @@ def initialise_objects(x = [370, 480, 590, 700, 810, 920, 1030, 1140], y = [165,
     obj_df = pd.DataFrame(objects)
     return obj_df
 
+def initialise_walls(x = 1543, y = 1520):
+    walls = []
+    wall_mask = np.ones((y, x))
+    wall_mask[0:-2, 1:-1] = 0
+    walls.append({'co-ordinates': (0, 0), 'mask': wall_mask})
+
+    walls_df = pd.DataFrame(walls)
+
+
+    return walls_df
+
 def initialise_detector_masks():
     mask_list = []
     mask = np.zeros((1550, 2000))
@@ -165,21 +176,30 @@ def initialise_detector_masks():
 
     return mask_df
 
-def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: tuple, testing_objs = False):
+def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: tuple, testing_objs = False, walls = False):
     for index in object_df.index:
-        obj = object_df['co-ordinates'][index]
         object_mask = object_df['mask'][index]
 
-        mask_df[f'r_{obj}'] = np.zeros_like(mask_df['theta (rad)'])
-        angles = angles_to_origin(obj, origin[0], origin[1])
-        start = min(angles)
-        end = max(angles)
+        if walls != True:
+            obj = object_df['co-ordinates'][index]
+
+            mask_df[f'r_{obj}'] = np.zeros_like(mask_df['theta (rad)'])
+            angles = angles_to_origin(obj, origin[0], origin[1])
+            start = min(angles)
+            end = max(angles)
+
+        else:
+            obj = 'wall'
+            mask_df[f'r_{obj}'] = np.zeros_like(mask_df['theta (rad)'])
+            start = 0
+            end = np.pi
 
         if testing_objs:
             plt.plot(origin[0], origin[1], 'ro')
             plt.plot([origin[0], origin[0] + 3000*np.cos(start)], [origin[1], origin[1] + 3000*np.sin(start)], 'r')
             plt.plot([origin[0], origin[0] + 3000*np.cos(end)], [origin[1], origin[1] + 3000*np.sin(end)], 'r')
             plt.imshow(object_mask, cmap = 'gray', origin = 'lower')
+            plt.show()
 
         sub_data = mask_df.loc[
             (mask_df['theta (rad)'] >= (start-np.deg2rad(1))) & 
@@ -193,6 +213,9 @@ def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: t
             sorted_distances = np.sort(distances)
             mean_distance = np.mean(sorted_distances[1:11])
             mask_df.at[index, f'r_{obj}'] = mean_distance
+
+            if testing_objs:
+                print(f'object: {obj}, angle: {mask_df["theta (rad)"][index]:.2f}, distance: {mean_distance:.2f}')
     
     return mask_df
 
@@ -241,3 +264,5 @@ def run2(object_list, data, testing_objs = False):
 
     print(left_mask_data)
 
+if __name__ == '__main__':
+   initialise_walls()

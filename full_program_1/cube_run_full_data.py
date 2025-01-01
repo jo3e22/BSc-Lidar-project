@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
+from matplotlib.lines import Line2D
+from matplotlib.markers import MarkerStyle
 import numpy as np
 import math as math
 import walls as walls
@@ -12,7 +14,6 @@ import re
 import time
 from typing import Any, Tuple, Union
 import inspect
-from matplotlib.markers import MarkerStyle
 
 # Read in the data
 Timing_enabled = False
@@ -117,7 +118,7 @@ def adjust_detector_masks(detector_df_input: pd.DataFrame, origin: Tuple) -> pd.
         return None
 
 @time_function
-def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, origin: Tuple, data_points: list, ax) -> None:
+def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, walls_df: pd.DataFrame, origin: Tuple, data_points: list, ax) -> None:
     data = data.copy()
     data['theta (deg)'] = data['theta (rad)'].apply(lambda x: np.rad2deg(x))
     detector_df['theta (deg)'] = detector_df['theta (rad)'].apply(lambda x: np.rad2deg(x))
@@ -141,14 +142,38 @@ def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, origin: Tuple, d
                 if index in data_r_col_nonzero.index:
                     diff = data_r_col_nonzero[index]-det_col_nonzero[index]
                     distance = np.sqrt((x-origin[0])**2 + (y-origin[1])**2)
-                    results_df.at[index, f'diff_{x}_{y}'] = diff
-                    ax.scatter(distance, diff, marker='o', color='black')
-                    ax.set_aspect('equal')
-                    #print(f"diff: {np.abs(diff):.1f} Data: {data_r_col_nonzero[index]:.0f}  Detector: {det_col_nonzero[index]:.0f}")
+
+                    wall_dis = walls_df.at[index, 'r_wall']
+                    wall_diff = wall_dis - data_r_col_nonzero[index]
+
+                    if abs(wall_diff) < abs(diff) and y < 1450:
+                        if abs(wall_diff) > 50:
+                            colour = 'purple'
+                            ax.scatter(distance, diff+wall_diff, marker='_', color='grey')
+                            ax.plot([distance, distance], [diff, diff+wall_diff], color='grey', linestyle='--')
+                        else:
+                            colour = 'red'
+                    else:
+                        colour = 'black'
+                        results_df.at[index, f'diff_{x}_{y}'] = diff
+                    ax.scatter(distance, diff, marker='o', color=colour)
 
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-    
+            print(f"An unexpected error occurred while comparing data: {e}")
+
+    # Custom legend
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='Closer to wall than object'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='purple', markersize=10, label='Closer to wall than object but more than 50cm away'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=10, label='Closer to object than wall')
+        ]
+    ax.legend(handles=legend_elements, loc='upper left')
+    ax.set_xlabel('Distance from origin')
+    ax.set_ylabel('Difference in distance')
+    ax.set_title('Difference in distance between object and detector')
+    ax.set_xlim(0, 1600)
+    ax.set_aspect('equal')
+
     return results_df
 
 @time_function
@@ -214,10 +239,7 @@ def plot_hist_simple(differences, ax, limit = 100, extras = False):
     mu, std = norm.fit(included_diffs)
     p = norm.pdf(x, mu, std)
     print(f'y_val of mean: {norm.pdf(mu, mu, std)}')
-    ax.hist(included_diffs, bins = 30, density = True, alpha = 0.6, color='g', label = 'histogram of differences')
-
-    #xmin, xmax = plt.xlim()
-    #x = np.linspace(xmin, xmax, (xmax-xmin))
+    ax.hist(included_diffs, bins = int(len(x)/5), alpha = 0.4, color='r', label = 'histogram of differences')
 
     ax.plot(x, p, 'k', linewidth=2, label = 'fit results: mu = %.2f,  std = %.2f' % (mu, std))
 
@@ -245,7 +267,7 @@ def plot_kde(differences, ax, limit = 100, extras = False):
             included_diffs.append(diff)
     
     if len(included_diffs) == len(differences):
-        limit = np.max(np.abs(included_diffs))
+        limit = int(np.max(np.abs(included_diffs)))
     
     x = np.linspace(max(differences), min(differences), 2000)
     print(f'min and max: {min(differences)}, {max(differences)}')
@@ -259,7 +281,7 @@ def plot_kde(differences, ax, limit = 100, extras = False):
     kde = gaussian_kde(differences)
     kde_vals = kde(x)
     ax.plot(x, kde_vals, 'k', linewidth=1, label = 'fit results: mu = %.2f,  std = %.2f' % (mu, std))
-    ax.fill_between(x, kde_vals, alpha=0.5, color='g')
+    ax.fill_between(x, kde_vals, alpha=0.4, color='r')
 
     #ax.plot(x_lim_only, p, 'k', linewidth=2, label = 'fit results: mu = %.2f,  std = %.2f' % (mu, std))
 
@@ -280,7 +302,7 @@ def custom_plot(differences, ax, limit = 100):
     differences = differences[differences != 0]
     incl_diffs = []
     for dif in differences:
-        if type(dif) == float:
+        if type(dif) == float or type(dif) == np.float64:
             incl_diffs.append(dif)
         else:
             print(f'Non-float value: {dif}')
@@ -294,15 +316,32 @@ def custom_plot(differences, ax, limit = 100):
 
     for i in range(1, len(differences)-1):
         point = differences[i]
-        width = np.abs(differences[i+1] - differences[i-1])
+        width = np.abs(differences[i+1] - differences[i-1])/2
         height = point_volume/width
-        print(f'width: {width}, height: {height}')
+        #print(f'width: {width}, height: {height}')
         ax.bar(point, height, width, align='center', alpha=0.5, color='g')
         ax.scatter(point, height, color='black', s=5)
         height_count += height
 
     print(f'height count: {height_count}')
     
+def custom_hist(differences, ax):
+    differences = differences[differences != 0]
+    differences = np.sort(differences)
+    start = differences[0]
+    end = differences[-1]
+    q = len(differences)
+    print(f'q: {q}')
+
+    num_elements = int((end - start) / 5) + 1
+    x = np.linspace(start, end, num_elements)
+
+    ax.hist(differences, bins = x, density = True, alpha = 0.4, color='r', label = 'histogram of differences')
+    ax.set_xlabel('Difference in distance')
+    ax.set_ylabel('Frequency')
+
+    
+
 
 '''
 #if object csv and detector csv do not exist, create them
@@ -325,6 +364,7 @@ else:
 '''
 obj_df = error.initialise_objects()
 detector_df = error.initialise_detector_masks()
+walls_df = error.initialise_walls()
 
 
 for filename in os.listdir(directory):
@@ -343,18 +383,22 @@ for filename in os.listdir(directory):
         left_detectors_df = adjust_detector_masks(detector_df, left_origin)
         right_detectors_df = adjust_detector_masks(detector_df, right_origin)
 
+        left_walls_df = error.generate_distances(walls_df, left_detectors_df, left_origin, False, True)
+        right_walls_df = error.generate_distances(walls_df, right_detectors_df, right_origin, False, True)
+
         left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False)
         right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False)
 
-        left_diffs = compare_data(data[0:16], left_detectors_df, left_origin, data_points, ax2)
-        right_diffs = compare_data(data[16:32], right_detectors_df, right_origin, data_points, ax2)
+        left_diffs = compare_data(data[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
+        right_diffs = compare_data(data[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
         all_diffs = pd.concat([left_diffs, right_diffs], axis=1)
 
         plot_background(ax, data, data_points)
         plot_diffs(ax, left_diffs, data_points, 'left')
         plot_diffs(ax, right_diffs, data_points, 'right')
 
-        #plot_kde(all_diffs.values.flatten(), ax1, 100, False)
+        custom_hist(all_diffs.values.flatten(), ax1)
         custom_plot(all_diffs.values.flatten(), ax1, 100)
+
 
         plt.show()        
