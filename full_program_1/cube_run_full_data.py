@@ -1,3 +1,4 @@
+#%%
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -183,7 +184,7 @@ def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, walls_df: pd.Dat
     return results_df
 
 @time_function
-def plot_background(ax_obj, data: pd.DataFrame, data_points = None, limits = True):
+def plot_background(ax_obj, data, data_points = None, limits = True):
     x = [370, 480, 590, 700, 810, 920, 1030, 1140]
     y = [165, 330, 480, 630, 780, 930, 1080, 1300, 1520]
 
@@ -365,12 +366,10 @@ obj_df = error.initialise_objects()
 detector_df = error.initialise_detector_masks()
 walls_df = error.initialise_walls()
 
-
+#%%
 for filename in os.listdir(directory):
     if filename.endswith("data.csv"):
-        fig, [ax0, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
-        #fig.suptitle(filename)
-
+        take_inputs = input(f'Do you want to take inputsfor file {filename}? (y/n): ')
         data = pd.read_csv(os.path.join(directory, filename))
         return_attributes(filename, data)
         data_points = return_data(data)
@@ -388,11 +387,184 @@ for filename in os.listdir(directory):
         left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False, False, data)
         right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False)
 
-        left_diffs = compare_data(data[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
-        right_diffs = compare_data(data[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
+        #left_diffs = compare_data(data[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
+        #right_diffs = compare_data(data[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
 
         print(f'\nFilename: {filename}')
+        array_of_dfs = []
+        for row_index in data.index:
+            row_data = pd.DataFrame()
+            # Create a copy of the row to avoid modifying the original DataFrame
+            row_data_copy = data.iloc[row_index].copy()
 
+            for (x, y) in data_points:
+                x_data = row_data_copy[f'x.{x}.{y}']
+                y_data = row_data_copy[f'y.{x}.{y}']
+                r_data = row_data_copy[f'r.{x}.{y}']
+                i_data = row_data_copy[f'i.{x}.{y}']
+
+                new_row = pd.DataFrame({
+                    'obj_xy': [(x, y)],
+                    'sensor_xy': [(x_data, y_data)],
+                    'r': [r_data],
+                    'intensity': [i_data],
+                    't_f': [False]
+                })
+                row_data = pd.concat([row_data, new_row], ignore_index=True)
+
+            x_values = [coord[0] for coord in row_data['sensor_xy']]
+            y_values = [coord[1] for coord in row_data['sensor_xy']]
+            xobj_values = [coord[0] for coord in row_data['obj_xy']]
+            yobj_values = [coord[1] for coord in row_data['obj_xy']]
+
+            for row in row_data.iterrows():
+                x, y = row[1]['sensor_xy']
+                r = row[1]['r']
+                i = row[1]['intensity']
+                obj_x, obj_y = row[1]['obj_xy']
+                difference = np.sqrt((x-obj_x)**2 + (y-obj_y)**2)
+                
+                if r != 10000 and difference < 300 and take_inputs == 'y':
+                    fig, ax = plt.subplots()
+                    ax.scatter(x_values, y_values, c='black', marker='+')
+                    ax.scatter(xobj_values, yobj_values, c='grey', marker='o')
+                    #ax.plot([x_values, xobj_values], [y_values, yobj_values], c='grey', linestyle='--')
+                    ax.plot([x, obj_x], [y, obj_y], c='black', linestyle='--')
+                    plot_background(ax, data, data_points)
+                    ax.scatter(x, y, c='red', marker='o')
+                    ax.scatter(obj_x, obj_y, c='green', marker='o')
+
+                    ax.set_title(f'Filename: {filename}, x: {x}, y: {y}, r: {r}, i: {i}, obj_x: {obj_x}, obj_y: {obj_y}')
+                    plt.show()
+
+                    t_f = input('Is this a true positive? (y/n): ')
+                    if t_f == 'y':
+                        row_data.at[row[0], 't_f'] = True
+
+            array_of_dfs.append(row_data)
+        new_filename = filename.strip('.csv') + '_new.csv'
+        new_folder = os.path.join(directory, f'new_data_{filename.strip(".csv")}')
+        os.makedirs(new_folder, exist_ok=True)  # Ensure the directory exists
+        for i, df in enumerate(array_of_dfs):
+            output_path = os.path.join(new_folder, f'{new_filename}_{i}.csv')
+            df.to_csv(output_path)
+            print(f'Saved {new_filename}_{i}.csv to {output_path}')
+            
+
+#%%
+directory_180_0 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_180.0.full_data"
+directory_180_24 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_180.24.full_data"
+directory_90_0 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_90.0.full_data"
+directory_90_24 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_90.24.full_data"
+directory_180_29 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_180.29.full_data"
+
+directories = [directory_180_0, directory_180_24, directory_90_0, directory_90_24, directory_180_29]
+
+def run_directories(directory):
+    def coordinates(string_input):
+        string_input = string_input[1:-1]
+        string_input = string_input.split(',')
+        for i in range(0, len(string_input)):
+            if 'np.float64' in string_input[i]:
+                string_input[i] = string_input[i].strip(' ')
+                string_input[i] = string_input[i].strip('np.float64')
+                string_input[i] = string_input[i].strip('(')
+                string_input[i] = string_input[i].strip(')')
+        x, y = string_input
+        return float(x), float(y)
+
+    wall_pointts = []
+
+    for filename in os.listdir(directory):
+        fig, ax = plt.subplots(1, 2, figsize=(18, 6))
+        print(f'Filename: {filename}')
+        if filename.endswith(".csv"):
+            parts = filename.split('_')
+            parts[-1] = parts[-1].strip('.csv')
+        
+            data = pd.read_csv(os.path.join(directory, filename))
+            obj_xy = data['obj_xy']
+            sensor_xy = data['sensor_xy']
+
+            r = data['r']
+            i = data['intensity']
+            t_f = data['t_f']
+
+            for row_index in data.index:
+                if r[row_index] != 10000:
+                    #print(f'Row index: {row_index}, Filename: {filename}, obj_xy: {obj_xy[row_index]}, lenobjxy: {len(obj_xy[row_index])}, sensor_xy: {sensor_xy[row_index]}, r: {r[row_index]}, i: {i[row_index]}, t_f: {t_f[row_index]}')
+                    obj_x, obj_y = coordinates(obj_xy[row_index])
+                    sensor_x, sensor_y = coordinates(sensor_xy[row_index])
+
+                    tf_i = t_f[row_index]
+                    if tf_i:
+                        ax[0].scatter(obj_x, obj_y, c='grey', marker='o')
+                        #ax[0].scatter(sensor_x, sensor_y, c='green', marker='o')
+                        ax[0].plot([sensor_x, obj_x], [sensor_y, obj_y], c='black', linestyle='--')
+                        plot_background(ax[0], True)
+                    else:
+                        #ax[1].scatter(obj_x, obj_y, c='grey', marker='o')
+                        ax[1].scatter(sensor_x, sensor_y, c='red', marker='o')
+                        #ax[1].plot([sensor_x, obj_x], [sensor_y, obj_y], c='black', linestyle='--')
+                        plot_background(ax[1], True)
+                        wall_pointts.append((sensor_x, sensor_y, row_index))
+
+        plt.show()
+    
+    fig, ax = plt.subplots(1, 1, figsize=(18, 6))
+    x = [x for x, y, i in wall_pointts]
+    y = [y for x, y, i in wall_pointts]
+    i = [i for x, y, i in wall_pointts]
+
+    for index, (x, y, i) in enumerate(wall_pointts):
+        print(f'Index: {index}')
+        if i > 15:
+            color = 'green'
+        else:
+            color = 'red'
+        ax.scatter(x, y, marker='o', color=color)
+    plot_background(ax, True)
+    plt.show()
+
+
+def plot_background(ax_obj, limits = True):
+    x = [370, 480, 590, 700, 810, 920, 1030, 1140]
+    y = [165, 330, 480, 630, 780, 930, 1080, 1300, 1520]
+
+    for i in x:
+        for j in y:
+            ax_obj.plot(i, j, marker='+', color='grey', markersize=5)
+
+    ax_obj.axvline(x=stage_x, color = 'grey', linestyle='--', label='Stage Edge')
+    ax_obj.axvline(x=room_x, color = 'grey', linestyle='--')
+    ax_obj.axhline(y=room_y, color = 'grey', linestyle='--')  
+
+    if limits:
+        ax_obj.set_xlim(0, room_x)
+        ax_obj.set_ylim(0, room_y+27)
+        ax_obj.set_aspect('equal')
+        ax_obj.set_xticks(x)
+        ax_obj.set_xticklabels(x)
+        for label in ax_obj.get_xticklabels():
+            label.set_rotation(-90)
+            label.set_horizontalalignment('right')
+        ax_obj.set_yticks(y)
+
+#%%
+run_directories(directory_90_0)
+
+
+
+
+
+
+
+
+
+
+
+#%%
+'''
         ax0.imshow(walls_df['mask'][0], cmap='grey', origin='lower')
         ax1.imshow(walls_df['mask'][0], cmap='grey', origin='lower')
         plot_background(ax0, data, data_points)
@@ -427,13 +599,7 @@ for filename in os.listdir(directory):
 
         
         plt.show()
-
-
-
-
-
-
-
+'''
 
 
 
@@ -466,3 +632,4 @@ for filename in os.listdir(directory):
             #print(f'Filename: {filename}, Points: {q}, Offset: {offset}, mu: {mu}, std: {std}')
             print(f'Offset: {offset}  |  Left Points: {lq:.1f}, Left mu: {lmu:.1f}, Left std: {lstd:.1f}  |  Right Points: {rq:.1f}, Right mu: {rmu:.1f}, Right std: {rstd:.1f}')
 '''
+# %%
