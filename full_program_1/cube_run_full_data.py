@@ -367,6 +367,8 @@ detector_df = error.initialise_detector_masks()
 walls_df = error.initialise_walls()
 
 #%%
+
+
 for filename in os.listdir(directory):
     if filename.endswith("data.csv"):
         take_inputs = input(f'Do you want to take inputsfor file {filename}? (y/n): ')
@@ -416,6 +418,8 @@ for filename in os.listdir(directory):
             y_values = [coord[1] for coord in row_data['sensor_xy']]
             xobj_values = [coord[0] for coord in row_data['obj_xy']]
             yobj_values = [coord[1] for coord in row_data['obj_xy']]
+            mean_r = row_data['r'].mean()
+            row_data.loc[row_data['r'] >3000, 'r'] = 0
 
             for row in row_data.iterrows():
                 x, y = row[1]['sensor_xy']
@@ -423,8 +427,10 @@ for filename in os.listdir(directory):
                 i = row[1]['intensity']
                 obj_x, obj_y = row[1]['obj_xy']
                 difference = np.sqrt((x-obj_x)**2 + (y-obj_y)**2)
+                obj_distance = np.sqrt((obj_x-left_origin[0])**2 + (obj_y-left_origin[1])**2)
                 
-                if r != 10000 and difference < 300 and take_inputs == 'y':
+                if r != 0 and difference < 300 and take_inputs == 'y':
+
                     fig, ax = plt.subplots()
                     ax.scatter(x_values, y_values, c='black', marker='+')
                     ax.scatter(xobj_values, yobj_values, c='grey', marker='o')
@@ -437,22 +443,49 @@ for filename in os.listdir(directory):
                     ax.set_title(f'Filename: {filename}, x: {x}, y: {y}, r: {r}, i: {i}, obj_x: {obj_x}, obj_y: {obj_y}')
                     plt.show()
 
-                    t_f = input('Is this a true positive? (y/n): ')
+                    if obj_distance < 15 and obj_y > 1300:
+                        tf = True
+                    else:
+                        t_f = input('Is this a true positive? (y/n): ')
+
+                    
                     if t_f == 'y':
                         row_data.at[row[0], 't_f'] = True
+                        data.at[row_index, f'corrected_diff_.{obj_x}.{obj_y}'] = True
+                    else:
+                        row_data.at[row[0], 't_f'] = False
+                        data.at[row_index, f'corrected_diff_.{obj_x}.{obj_y}'] = False
 
-            array_of_dfs.append(row_data)
-        new_filename = filename.strip('.csv') + '_new.csv'
-        new_folder = os.path.join(directory, f'new_data_{filename.strip(".csv")}')
-        os.makedirs(new_folder, exist_ok=True)  # Ensure the directory exists
-        for i, df in enumerate(array_of_dfs):
-            output_path = os.path.join(new_folder, f'{new_filename}_{i}.csv')
-            df.to_csv(output_path)
-            print(f'Saved {new_filename}_{i}.csv to {output_path}')
-            
+            '''if take_inputs == 'y':
+                new_filename = filename.strip('.csv') + '_new'
+                new_folder = os.path.join(directory, f'new_data3_{filename.strip(".csv")}')
+                output_path = os.path.join(new_folder, f'{new_filename}_{row_index}.csv')
+                os.makedirs(new_folder, exist_ok=True)  # Ensure the directory exists
+                row_data.to_csv(output_path)
+                print(f'Saved {new_filename}_{row_index}.csv to {output_path}')'''
+    data.to_csv(os.path.join(directory, f'new{filename}'), index=True)
+    print(f'Saved {filename}new to {directory}')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #%%
-directory_180_0 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_180.0.full_data"
+directory_180_0 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data3_180.0.full_data"
 directory_180_24 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_180.24.full_data"
 directory_90_0 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_90.0.full_data"
 directory_90_24 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_90.24.full_data"
@@ -461,6 +494,10 @@ directory_180_29 = r"C:\Users\james\OneDrive - University of Southampton\PHYS pa
 directories = [directory_180_0, directory_180_24, directory_90_0, directory_90_24, directory_180_29]
 
 def run_directories(directory):
+    parts = directory.split('_')
+    separation = int(parts[-2])
+    offset_angle = int(parts[-1])
+
     def coordinates(string_input):
         string_input = string_input[1:-1]
         string_input = string_input.split(',')
@@ -473,8 +510,7 @@ def run_directories(directory):
         x, y = string_input
         return float(x), float(y)
 
-    wall_pointts = []
-
+    wall_points = []
     for filename in os.listdir(directory):
         fig, ax = plt.subplots(1, 2, figsize=(18, 6))
         print(f'Filename: {filename}')
@@ -490,6 +526,16 @@ def run_directories(directory):
             i = data['intensity']
             t_f = data['t_f']
 
+            wall_data = data[(data['t_f'] == False) & (data['r'] != 0)]
+            wall_distributions(wall_data, ax[0])
+            wall_points.append(wall_data)
+        plt.show()
+
+    fig, ax = plt.subplots(1, 1, figsize=(18, 6))
+    wall_distributions(pd.concat(wall_points), ax)
+    plt.show()
+
+    '''
             for row_index in data.index:
                 if r[row_index] != 10000:
                     #print(f'Row index: {row_index}, Filename: {filename}, obj_xy: {obj_xy[row_index]}, lenobjxy: {len(obj_xy[row_index])}, sensor_xy: {sensor_xy[row_index]}, r: {r[row_index]}, i: {i[row_index]}, t_f: {t_f[row_index]}')
@@ -499,7 +545,7 @@ def run_directories(directory):
                     tf_i = t_f[row_index]
                     if tf_i:
                         ax[0].scatter(obj_x, obj_y, c='grey', marker='o')
-                        #ax[0].scatter(sensor_x, sensor_y, c='green', marker='o')
+                        ax[0].scatter(sensor_x, sensor_y, c='green', marker='o')
                         ax[0].plot([sensor_x, obj_x], [sensor_y, obj_y], c='black', linestyle='--')
                         plot_background(ax[0], True)
                     else:
@@ -507,16 +553,16 @@ def run_directories(directory):
                         ax[1].scatter(sensor_x, sensor_y, c='red', marker='o')
                         #ax[1].plot([sensor_x, obj_x], [sensor_y, obj_y], c='black', linestyle='--')
                         plot_background(ax[1], True)
-                        wall_pointts.append((sensor_x, sensor_y, row_index))
+                        wall_points.append((sensor_x, sensor_y, row_index))
 
         plt.show()
     
     fig, ax = plt.subplots(1, 1, figsize=(18, 6))
-    x = [x for x, y, i in wall_pointts]
-    y = [y for x, y, i in wall_pointts]
-    i = [i for x, y, i in wall_pointts]
+    x = [x for x, y, i in wall_points]
+    y = [y for x, y, i in wall_points]
+    i = [i for x, y, i in wall_points]
 
-    for index, (x, y, i) in enumerate(wall_pointts):
+    for index, (x, y, i) in enumerate(wall_points):
         print(f'Index: {index}')
         if i > 15:
             color = 'green'
@@ -524,7 +570,7 @@ def run_directories(directory):
             color = 'red'
         ax.scatter(x, y, marker='o', color=color)
     plot_background(ax, True)
-    plt.show()
+    plt.show()'''
 
 
 def plot_background(ax_obj, limits = True):
@@ -550,9 +596,29 @@ def plot_background(ax_obj, limits = True):
             label.set_horizontalalignment('right')
         ax_obj.set_yticks(y)
 
-#%%
-run_directories(directory_90_0)
 
+#%%
+def wall_distributions(wall_data, ax):
+    r = wall_data['r']
+    mu, std = norm.fit(r)
+    #print(f'mu: {mu}, std: {std}')
+    x = np.linspace(mu-5*std, mu+5*std, 1000)
+    p = norm.pdf(x, mu, std)
+    #x = x - mu
+    #r = r - mu
+
+    ax.hist(r, bins = 20, density = True, alpha = 0.4, color='r')
+    ax.scatter(x, p, c='black')
+
+    ax.title.set_text(f'Wall distribution, mu: {mu:.2f}, std: {std:.2f}')
+
+
+
+#%%
+for directory in directories:
+    run_directories(directory)
+#%%
+run_directories(directory_180_0)
 
 
 
@@ -632,4 +698,43 @@ run_directories(directory_90_0)
             #print(f'Filename: {filename}, Points: {q}, Offset: {offset}, mu: {mu}, std: {std}')
             print(f'Offset: {offset}  |  Left Points: {lq:.1f}, Left mu: {lmu:.1f}, Left std: {lstd:.1f}  |  Right Points: {rq:.1f}, Right mu: {rmu:.1f}, Right std: {rstd:.1f}')
 '''
+# %%
+def return_data(data: pd.DataFrame):
+    #pattern = r"^(?P<prefix>corrected_diff|r|i|x|y|diff)_X(?P<xvalue>\d+)Y(?P<yvalue>\d+)$"
+    pattern = r"^(?P<prefix>corrected_diff_|r|i|x|y|diff_).(?P<xvalue>\d+).(?P<yvalue>\d+)$"
+    pattern2 = r"^(?P<prefix>corrected_diff).(?P<xvalue>\d+).(?P<yvalue>\d+)$"
+    data_points = []
+    for column in data.columns[4::]:
+        match = re.match(pattern, column)
+        match2 = re.match(pattern2, column)
+        if match:
+            prefix = match.group('prefix')
+            x = int(match.group('xvalue'))
+            y = int(match.group('yvalue'))
+            if (x, y) not in data_points and (x, y) != (0, 0):
+                data_points.append((x, y))
+        
+        elif match2:
+            prefix = match2.group('prefix')
+            x = int(match2.group('xvalue'))
+            y = int(match2.group('yvalue'))
+
+            if (x,y) in data_points:
+                data[f'corrected_diff_.{x}.{y}'] = data[f'corrected_diff.{x}.{y}']
+                data.drop(columns=[f'corrected_diff.{x}.{y}'], inplace=True)
+
+        else:
+            print(f'No match found for {column}')
+        
+    return data_points
+
+
+for filename in os.listdir(directory):
+    if filename.endswith("data.csv") and filename.startswith('new'):
+        data = pd.read_csv(os.path.join(directory, filename))
+        data_points = return_data(data)
+
+        data.to_csv(os.path.join(directory, f'{filename}'), index=True)
+        print(f'Saved {filename}new to {directory}')
+
 # %%
