@@ -55,7 +55,8 @@ def distances(data, james, ax):
     sensor_num = []
     data_diff = np.zeros_like(data['r'])
     for i in range(len(data['detector_mask'])):
-        mask = data['detector_mask'][i] * james
+        data_mask = data['detector_mask'][i]
+        mask = data_mask * james
 
         if mask.sum() > 0 and data['i'][i] > 0:
             r = data['r'][i]
@@ -73,8 +74,14 @@ def distances(data, james, ax):
             distances_arr.append(np.mean(front_faces))
             diff_arr.append(np.mean(diff))
             data_diff[i] = np.mean(diff)
+
+            #make mask 3d for colour channels
+            mask_3d = np.zeros(mask.shape + (3,))
+            mask_3d[:,:,0] = james
+            mask_3d[:,:,2] = data_mask
+            mask_3d[:,:,1] = mask
             
-            plt.imshow(mask, cmap = 'gray', origin = 'lower')
+            plt.imshow(mask_3d, origin = 'lower')
             plt.plot(data['x_origin'][i], data['y_origin'][i], 'ro')
             x = data['x_origin'][i]
             y = data['y_origin'][i]
