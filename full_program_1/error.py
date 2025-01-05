@@ -223,12 +223,15 @@ def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: t
             mask_df.at[index, f'r_{obj}'] = mean_distance
 
             if data_df is not None:
-                diff = data_df[f'r.{obj[0]}.{obj[1]}'][index] - mean_distance
-                print(f'diff: {diff}')
-                print(f'corrected_diff: {data_df[f"corrected_diff_.{obj[0]}.{obj[1]}"][index]}')
-                if data_df[f'corrected_diff_.{obj[0]}.{obj[1]}'][index] is True:
-                    data_df[f'corrected_diff_.{obj[0]}.{obj[1]}'] = diff
-                data_df[f'diff.{obj[0]}.{obj[1]}'] = diff
+                try:
+                    diff = data_df[f'r.{obj[0]}.{obj[1]}'][index] - mean_distance
+                    print(f'diff: {diff}')
+                    print(f'corrected_diff: {data_df[f"corrected_diff_.{obj[0]}.{obj[1]}"][index]}')
+                    if data_df[f'corrected_diff_.{obj[0]}.{obj[1]}'][index] is True:
+                        data_df[f'corrected_diff_.{obj[0]}.{obj[1]}'] = diff
+                    data_df[f'diff.{obj[0]}.{obj[1]}'] = diff
+                except:
+                    pass
 
             if testing_objs:
                 print(f'object: {obj}, angle: {mask_df["theta (rad)"][index]:.2f}, distance: {mean_distance:.2f}')
