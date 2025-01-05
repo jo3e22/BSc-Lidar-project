@@ -305,8 +305,13 @@ def plot_background(ax_obj, data, data_points = None, limits = True):
 def plot_diffs(ax_obj, diff_df: pd.DataFrame, data_points: list, l_r: str) -> None:
     for (x, y) in data_points:
         try:
-            diff_col = diff_df[f'diff_{x}_{y}']
+            t_f_col = diff_df[f'corrected_diff_.{x}.{y}']
+            diff_col = diff_df[f'diff_.{x}.{y}']
+            print(f'diff_col: {len(diff_col)}')
+            diff_col = diff_col[t_f_col.astype(bool)]
+            print(f't_f-diff_col: {len(diff_col)}')
             diff_col_nonzero = diff_col[diff_col != 0]
+            print(f'non-z-diff_col: {len(diff_col_nonzero)}')
             mean_diff = np.mean(diff_col_nonzero)
             if np.abs(mean_diff) < 30:
                 mean_diff_val = np.abs(mean_diff)/30
@@ -463,10 +468,12 @@ def plot_walls(data, data_points, overall_plot = False, ax = None):
             })
             row_data = pd.concat([row_data, new_row], ignore_index=True)
         
-        wall_data = row_data[(row_data['t_f'] != True) & (row_data['t_f'] != 'True') & (row_data['r'] != 10000)]
-        
+        wall_data = row_data[(row_data['r'] != 10000) & (row_data['t_f'] != True) & (row_data['t_f'] != 'True')]
+        #point_data = row_data[(row_data['r'] != 10000) & ((row_data['t_f'] == True) | (row_data['t_f'] == 'True'))]
+                
         #if row_index > 4:
         overall_diffs.extend(wall_data['diff'])
+        #overall_diffs.extend(point_data['diff'])
 
         '''
         wall_x = [coord[0] for coord in wall_data['wall_xy']]
@@ -649,7 +656,7 @@ walls_df = error.initialise_walls()
 #%%
 for filename in os.listdir(directory):
     #if filename.endswith("data.csv"):
-    if filename.endswith("data.csv") and filename.startswith("new90.24"):
+    if filename.endswith("data.csv") and filename.startswith("new180"):
         print(f'\nFilename: {filename}')
         data = pd.read_csv(os.path.join(directory, filename))
         return_attributes(filename, data)
@@ -661,31 +668,35 @@ for filename in os.listdir(directory):
 
         left_data = data[0:16].copy()
         right_data = data[16:32].copy()
-        left_data['theta (rad)'] = left_data['theta (rad)'] - np.deg2rad(data.offset_angle)
-        right_data['theta (rad)'] = right_data['theta (rad)'] - np.deg2rad(data.offset_angle)
-        data = pd.concat([left_data, right_data], ignore_index=True)
+        #left_data['theta (rad)'] = left_data['theta (rad)'] - np.deg2rad(data.offset_angle)
+        #right_data['theta (rad)'] = right_data['theta (rad)'] - np.deg2rad(data.offset_angle)
+        #data = pd.concat([left_data, right_data], ignore_index=True)
 
-        #left_detectors_df = adjust_detector_masks(detector_df, left_origin)
-        #right_detectors_df = adjust_detector_masks(detector_df, right_origin)
+        left_detectors_df = adjust_detector_masks(detector_df, left_origin)
+        right_detectors_df = adjust_detector_masks(detector_df, right_origin)
 
         #left_walls_df = error.generate_distances(walls_df, left_detectors_df, left_origin, False, True)
         #right_walls_df = error.generate_distances(walls_df, right_detectors_df, right_origin, False, True)
 
-        #left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False, False, data)
-        #right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False)
+        print(f'test')
+        left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False, False, data_df = data)
+        right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False, False, data_df = data)
+
 
         #left_diffs = compare_data(data[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
         #right_diffs = compare_data(data[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
 
         #manual_checking(directory, filename, data)
 
-        fig, ax = plt.subplots(1, 1, figsize=(18, 6))
+        #fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(18, 6))
+        #plot_diffs(ax1, left_data, data_points, 'left')
+        #plot_diffs(ax1, right_data, data_points, 'right')
 
-        plot_walls(data, data_points, True, ax)
+        #plot_walls(data, data_points, True, ax2)
 
-        plt.show()
+        #plt.show()
         
-        
+        '''
         left_data = data[0:16].copy()
         right_data = data[16:32].copy()
         
@@ -710,6 +721,7 @@ for filename in os.listdir(directory):
 
         data.to_csv(os.path.join(directory, f'corrected_angle_{quantity_l}_{quantity_r}_{filename}'), index=False)
         print(f'Saved corrected_angle{quantity_l}_{quantity_r}{filename} to {directory}')
+        '''
         
 
 

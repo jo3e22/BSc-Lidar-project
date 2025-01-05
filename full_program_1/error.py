@@ -177,6 +177,8 @@ def initialise_detector_masks():
     return mask_df
 
 def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: tuple, testing_objs = False, walls = False, data_df = None):
+    print(f'data_df: {data_df}')
+    print(f'test')
     for index in object_df.index:
         object_mask = object_df['mask'][index]
 
@@ -220,10 +222,21 @@ def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: t
             mean_distance = np.mean(sorted_distances[1:11])
             mask_df.at[index, f'r_{obj}'] = mean_distance
 
+            if data_df is not None:
+                diff = data_df[f'r.{obj[0]}.{obj[1]}'][index] - mean_distance
+                print(f'diff: {diff}')
+                print(f'corrected_diff: {data_df[f"corrected_diff_.{obj[0]}.{obj[1]}"][index]}')
+                if data_df[f'corrected_diff_.{obj[0]}.{obj[1]}'][index] is True:
+                    data_df[f'corrected_diff_.{obj[0]}.{obj[1]}'] = diff
+                data_df[f'diff.{obj[0]}.{obj[1]}'] = diff
+
             if testing_objs:
                 print(f'object: {obj}, angle: {mask_df["theta (rad)"][index]:.2f}, distance: {mean_distance:.2f}')
     
-    return mask_df
+    if data_df is not None:
+        return mask_df, data_df
+    else:
+        return mask_df
 
 def run2(object_list, data, testing_objs = False):
     left_mask_data = detector_mask2(data.offset_angle, data['x_origin'][0], data['y_origin'][0])
