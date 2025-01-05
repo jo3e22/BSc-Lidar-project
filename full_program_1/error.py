@@ -48,7 +48,7 @@ def create_binary_mask(origin, radius, start_angle, end_angle, image_size, inten
          (angle_from_origin <= end_angle)] = 1
     return mask
 
-def distances(data, james, ax):
+def distances(data, james, ax, plot = False):
     r_arr = []
     distances_arr = []
     diff_arr = []
@@ -75,22 +75,23 @@ def distances(data, james, ax):
             diff_arr.append(np.mean(diff))
             data_diff[i] = np.mean(diff)
 
-            #make mask 3d for colour channels
-            mask_3d = np.zeros(mask.shape + (3,))
-            mask_3d[:,:,0] = james
-            mask_3d[:,:,2] = data_mask
-            mask_3d[:,:,1] = mask
-            
-            plt.imshow(mask_3d, origin = 'lower')
-            plt.plot(data['x_origin'][i], data['y_origin'][i], 'ro')
-            x = data['x_origin'][i]
-            y = data['y_origin'][i]
-            mid_angle_rad = data['theta (rad)'][i]
-            distance = data['r'][i]
-            plt.plot([x + distance * np.cos(mid_angle_rad-np.deg2rad(1.5)), x + distance * np.cos(mid_angle_rad+np.deg2rad(1.5))], 
-                    [y + distance * np.sin(mid_angle_rad-np.deg2rad(1.5)), y + distance * np.sin(mid_angle_rad+np.deg2rad(1.5))], 
-                    linestyle='dotted', color='red')
-            plt.show()
+            if plot:
+                #make mask 3d for colour channels
+                mask_3d = np.zeros(mask.shape + (3,))
+                mask_3d[:,:,0] = james
+                mask_3d[:,:,2] = data_mask
+                mask_3d[:,:,1] = mask
+                
+                ax.imshow(mask_3d, origin = 'lower')
+                ax.plot(data['x_origin'][i], data['y_origin'][i], 'ro')
+                x = data['x_origin'][i]
+                y = data['y_origin'][i]
+                mid_angle_rad = data['theta (rad)'][i]
+                distance = data['r'][i]
+                ax.plot([x + distance * np.cos(mid_angle_rad-np.deg2rad(1.5)), x + distance * np.cos(mid_angle_rad+np.deg2rad(1.5))], 
+                        [y + distance * np.sin(mid_angle_rad-np.deg2rad(1.5)), y + distance * np.sin(mid_angle_rad+np.deg2rad(1.5))], 
+                        linestyle='dotted', color='red')
+                plt.show()
 
     '''
     for i in range(len(r_arr)):
@@ -101,13 +102,13 @@ def distances(data, james, ax):
     '''
     return data_diff
 
-def run(data, object, ax):
+def run(data, object, ax, plot = False):
     james = create_ellipse_mask(40, 15, int(object[0]), int(object[1]), 1545)
     local_data = data.copy()
     mask_arr = detector_mask(local_data, 1545, 1545)
     data['detector_mask'] = mask_arr
 
-    data_diff = distances(data, james, ax)
+    data_diff = distances(data, james, ax, plot)
     local_data['r_diff'] = data_diff
     #ax.imshow(james, cmap = 'gray', origin = 'lower')
 
