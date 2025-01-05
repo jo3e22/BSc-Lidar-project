@@ -177,8 +177,6 @@ def initialise_detector_masks():
     return mask_df
 
 def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: tuple, testing_objs = False, walls = False, data_df = None):
-    print(f'data_df: {data_df}')
-    print(f'test')
     for index in object_df.index:
         object_mask = object_df['mask'][index]
 
@@ -228,8 +226,7 @@ def generate_distances(object_df: pd.DataFrame, mask_df: pd.DataFrame, origin: t
                     print(f'diff: {diff}')
                     print(f'corrected_diff: {data_df[f"corrected_diff_.{obj[0]}.{obj[1]}"][index]}')
                     if data_df[f'corrected_diff_.{obj[0]}.{obj[1]}'][index] is True:
-                        data_df[f'corrected_diff_.{obj[0]}.{obj[1]}'] = diff
-                    data_df[f'diff.{obj[0]}.{obj[1]}'] = diff
+                        data_df[f'diff_.{obj[0]}.{obj[1]}'][index] = diff
                 except:
                     pass
 
