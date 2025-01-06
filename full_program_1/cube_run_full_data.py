@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib.lines import Line2D
 from matplotlib.markers import MarkerStyle
+import matplotlib.colors as mcolors
 import numpy as np
 import math as math
 import walls as walls
@@ -140,6 +141,7 @@ def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, walls_df: pd.Dat
     for (x, y) in data_points:
         try:
             data_r_col = data[f'r.{x}.{y}']
+            data_tf_col = data[f'corrected_diff_.{x}.{y}']
             data_r_col_nonzero = data_r_col[data_r_col != 10000]
             det_col = detector_df[f'r_({x}, {y})']
             det_col_nonzero = det_col[det_col != 0]
@@ -154,6 +156,11 @@ def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, walls_df: pd.Dat
 
                     wall_dis = walls_df.at[index, 'r_wall']
                     wall_diff = wall_dis - data_r_col_nonzero[index]
+
+                    if data_tf_col[index] == True or data_tf_col[index] == 'True':
+                        data.at[index, f'corrected_diff_.{x}{y}'] = diff
+                        #print(f'data: {data.at[index, f"corrected_diff_.{x}{y}"]}')
+                        useful_data.append((x, y, data_r_col_nonzero[index], det_col_nonzero[index], diff, wall_dis, wall_diff))
 
                     if abs(wall_diff) < abs(diff) and y < 1450:
                         if abs(wall_diff) > 50:
@@ -307,12 +314,10 @@ def plot_diffs(ax_obj, diff_df: pd.DataFrame, data_points: list, l_r: str) -> No
         try:
             t_f_col = diff_df[f'corrected_diff_.{x}.{y}']
             diff_col = diff_df[f'diff_.{x}.{y}']
-            print(f'diff_col: {len(diff_col)}')
-            diff_col = diff_col[t_f_col.astype(bool)]
-            print(f't_f-diff_col: {len(diff_col)}')
+            diff_col = diff_col[(t_f_col == True) | (t_f_col == 'True')]
             diff_col_nonzero = diff_col[diff_col != 0]
-            print(f'non-z-diff_col: {len(diff_col_nonzero)}')
             mean_diff = np.mean(diff_col_nonzero)
+           
             if np.abs(mean_diff) < 30:
                 mean_diff_val = np.abs(mean_diff)/30
             else:
@@ -530,10 +535,13 @@ def calculate(angle, origin_x, origin_y, left_x_limit, room_x, room_y):
     return min_distance, coordinates
 
 @time_function
-def wall_distributions(diffs, ax, bins = 10):
+def wall_distributions(diffs, ax, bins = 10, limits = None):
 
     r = diffs
-    mu, std = norm.fit(r)
+    bound_r = np.array(r)
+    if limits is not None:
+        bound_r = bound_r[(bound_r < limits) & (bound_r > -limits)]
+    mu, std = norm.fit(bound_r)
     #print(f'mu: {mu}, std: {std}')
     x = np.linspace(mu-5*std, mu+5*std, 1000)
     p = norm.pdf(x, mu, std)
@@ -541,9 +549,13 @@ def wall_distributions(diffs, ax, bins = 10):
     #r = r - mu
 
     ax.hist(r, bins = bins, density = True, alpha = 0.4, color='r')
-    ax.scatter(x, p, c='black')
+    ax.scatter(x, p, c='black', s=5)
 
-    ax.title.set_text(f'Wall distribution, mu: {mu:.2f}, std: {std:.2f}')  
+    ax.title.set_text(f'Wall distribution, mu: {mu:.2f}, std: {std:.2f}')
+    ax.set_xlabel('Difference in distance')
+    ax.set_ylabel('Frequency')
+
+    return mu, std  
 
 @time_function
 def analise_offsets(data):
@@ -626,7 +638,19 @@ def analise_offsets(data):
 
     return final_theta, final_x
 
-            
+def simple_diff(data):
+    for (x, y) in data_points:
+        r = data[f'r.{x}.{y}']
+        corrected_diff = data[f'corrected_diff_.{x}.{y}']
+
+        for index in corrected_diff.index:
+            if corrected_diff[index] == True or corrected_diff[index] == 'True':
+                origin = (data['x_origin'][index], data['y_origin'][index]) 
+                distance = np.sqrt((x-origin[0])**2 + (y-origin[1])**2)
+                diff = r[index] - distance
+                data.at[index, f'diff_.{x}.{y}'] = diff
+
+
   
 
 #%% initialise masks
@@ -659,42 +683,71 @@ for filename in os.listdir(directory):
     if filename.endswith("data.csv") and filename.startswith("new180"):
         print(f'\nFilename: {filename}')
         data = pd.read_csv(os.path.join(directory, filename))
+        filename = filename.strip('corrected_anglenew')
         return_attributes(filename, data)
         data_points = return_data(data)
-
 
         left_origin = (data['x_origin'][0], data['y_origin'][0])
         right_origin = (data['x_origin'][17], data['y_origin'][17])
 
-        left_data = data[0:16].copy()
-        right_data = data[16:32].copy()
         #left_data['theta (rad)'] = left_data['theta (rad)'] - np.deg2rad(data.offset_angle)
         #right_data['theta (rad)'] = right_data['theta (rad)'] - np.deg2rad(data.offset_angle)
         #data = pd.concat([left_data, right_data], ignore_index=True)
 
-        left_detectors_df = adjust_detector_masks(detector_df, left_origin)
-        right_detectors_df = adjust_detector_masks(detector_df, right_origin)
+        #left_detectors_df = adjust_detector_masks(detector_df, left_origin)
+        #right_detectors_df = adjust_detector_masks(detector_df, right_origin)
 
         #left_walls_df = error.generate_distances(walls_df, left_detectors_df, left_origin, False, True)
         #right_walls_df = error.generate_distances(walls_df, right_detectors_df, right_origin, False, True)
 
-        print(f'test')
-        left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False, False, data_df = data)
-        right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False, False, data_df = data)
 
+        #left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False, False, data_df = data)
+        #right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False, False, data_df = data)
 
+        fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(14, 6))
         #left_diffs = compare_data(data[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
         #right_diffs = compare_data(data[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
 
         #manual_checking(directory, filename, data)
+        simple_diff(data)
+        left_data = data[0:16].copy()
+        right_data = data[16:32].copy()
+        plot_diffs(ax1, left_data, data_points, 'left')
+        plot_diffs(ax1, right_data, data_points, 'right')
+        plot_background(ax1, data, data_points)
+        sm = plt.cm.ScalarMappable(cmap='YlOrRd', norm=mcolors.Normalize(vmin=0, vmax=30))
+        cbar = plt.colorbar(sm, ax=ax1, shrink=0.8)
+        cbar.set_label('differnece from object (cm)')
+        cbar.set_ticks([0, 10, 20, 30])
+        cbar.set_ticklabels(['0', '10', '20', '30'])
 
-        #fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(18, 6))
-        #plot_diffs(ax1, left_data, data_points, 'left')
-        #plot_diffs(ax1, right_data, data_points, 'right')
+        diffss = []
+        for (x, y) in data_points:
+            if y < 1600:
+                diff_col = data[f'diff_.{x}.{y}']
+                tf = data[f'corrected_diff_.{x}.{y}']
+                for index in diff_col.index:
+                    if tf[index] == True or tf[index] == 'True':
+                        if diff_col[index] != 0:
+                            diffss.append(diff_col[index])
+                        else:
+                            print(f'Zero diff found or diff > 50: {diff_col[index]}')
+                        
+        mu, std = wall_distributions(diffss, ax2, bins = 20, limits = 40)
 
         #plot_walls(data, data_points, True, ax2)
 
-        #plt.show()
+
+        ax1.set_xlabel('x location (cm)')
+        ax1.set_ylabel('y location (cm)')
+        ax1.set_title('Difference in distance between\nobject and detector value')
+
+        ax2.set_xlabel('Difference in distance (cm)')
+        ax2.set_ylabel('Frequency')
+        ax2.set_title(f'Histogram of differences between\nobject and detector value')
+        ax2.text(0.5, 0.5, f'mu: {mu:.2f}cm\nstd: {std:.2f}cm', horizontalalignment='left', verticalalignment='bottom', transform=ax2.transAxes)
+        ax2.set_box_aspect(1)
+        plt.show()
         
         '''
         left_data = data[0:16].copy()
