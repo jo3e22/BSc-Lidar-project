@@ -139,16 +139,16 @@ def read_file(file):
 
 
 
-#file = files[310]
+files = files[310:320]
 differences = []
 for file in files:
     data = read_file(file)
     file_name = str(file).strip('.csv')
 
-    #fig, ax = plt.subplots(1, 2, figsize = (30, 15))
-    #plot(data, ax)
+    fig, ax = plt.subplots(1, 2, figsize = (30, 15))
+    plot(data, ax)
     obj = extract_obj(file)
-    r_diff = error.run(data, obj, ax = None)
+    r_diff = error.run(data, obj, ax = None, plot = False)
     r_d = r_diff[r_diff > 0]
     r_d_n = r_diff[r_diff < 0]
     differences.append(r_d)
@@ -157,10 +157,10 @@ for file in files:
 
     folder_path = 'processed_csv_folder'
     full_path = os.path.join(folder_path, file_name)
-    data.to_csv(f'{full_path}.csv', index=False)
+    #data.to_csv(f'{full_path}.csv', index=False)
     #print(f'file: {file}, r_diff: {r_diff}')
 
-    '''
+    
     segments = walls.find_segment(data[['x', 'y', 'i']].values, epsilon=20)
 
     for segment in segments:
@@ -188,7 +188,7 @@ for file in files:
         y_fit = [a + b * x for x in x_arr]
         ax[1].plot(x_arr, y_fit, color = 'red')
     
-    #plt.show()
+    plt.show()
 
 #plot a histogram of the differences
 differences = np.concatenate(differences)
@@ -205,4 +205,4 @@ p = norm.pdf(x, mu, std)
 plt.plot(x, p, 'k', linewidth=2)
 title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
 plt.title(title)
-plt.show()'''
+plt.show()
