@@ -8,7 +8,6 @@ import re
 class File_Data:
     def __init__(self, data_frame):
         self.file_name, self.theta_arr, self.r_arr, self.i_arr = get_values(data_frame)
-        self.x_arr, self.y_arr = polar2cartesian(self.theta_arr, self.r_arr)
         self.pattern = r"(\w+)\.(\d+)\.(\d+)\.(\w+)X(\d+)Y(\d+)_leddar(\d+)\.lvm"
         self.pattern2 = r"(\w+)\.(\d+)\.(\d+)\.(\w+)\.(\w+)X(\d+)Y(\d+)_leddar(\d+)\.lvm"
         self.obj_x, self.obj_y, self.leddar, self.identifier, self.pair_label = self.split_file_name(self.file_name)
