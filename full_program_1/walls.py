@@ -4,6 +4,7 @@ def find_segment(points, epsilon=10):
     # Find the segments in the points
     segments = []
     segment = []
+    points = np.array(points)
     points = points[points[:, 2] > 0]
     for i in range(len(points) - 2):
         x1, y1, i1 = points[i]
@@ -47,6 +48,35 @@ def join_connected_segments0(segments_input, b_input):
     
     return connected_segments
 
+<<<<<<< HEAD
+def grow_segment(segments, points, epsilon=10):
+    segments = np.copy(segments)
+    for i, segment in enumerate(segments):
+        # Grow the segment by adding points to it
+        x1, y1 = segment[0]
+        x2, y2 = segment[-1]
+        for point in points:
+            x0, y0, i0 = point
+            if min(i0, x0, y0) > max(i0, x0, y0)/3:
+                distance = np.abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1) / np.sqrt((y2 - y1)**2 + (x2 - x1)**2)
+                if distance < epsilon:
+                    segments[i].append((x0, y0))
+
+    return segments
+
+
+
+def segment_lines(seg):
+    x = [point[0] for point in seg]
+    y = [point[1] for point in seg]
+    b, a = best_fit(x, y)
+    x_fit = np.linspace(min(x), max(x), 20)
+    y_fit = a*x_fit + b
+    seg_lines =(x_fit, y_fit)
+    
+    return seg_lines
+
+=======
 def join_connected_segments(segments_input, b_input):
     segments = np.copy(segments_input)
     b = np.copy(b_input)
@@ -111,6 +141,7 @@ def combine_lists_of_tuples_b(lists, b):
         return groups
     combined_groups = find_common_groups(lists, b)
     return [list(group) for group in combined_groups]
+>>>>>>> origin/main
 
 def best_fit(X, Y):
 
