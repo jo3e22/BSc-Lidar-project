@@ -1,3 +1,4 @@
+#%%
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -61,6 +62,8 @@ def time_function(func):
 def return_attributes(filename: str, data: pd.DataFrame) -> Union[Tuple[int, int], None]:
     try:
         name = filename.strip('.csv')
+        if 'new' in name:
+            name = name.replace('new', '')
         parts = name.split('.')
         if len(parts) != 3:
             raise ValueError(f"Filename {filename} is not in the correct format.")
@@ -95,7 +98,8 @@ def return_data(data: pd.DataFrame):
             if (x, y) not in data_points and (x, y) != (0, 0):
                 data_points.append((x, y))
         else:
-            print(f'No match found for {column}')
+            if 'origin' not in column:
+                print(f'No match found for {column}')
         
     return data_points
 
@@ -182,8 +186,93 @@ def compare_data(data: pd.DataFrame, detector_df: pd.DataFrame, walls_df: pd.Dat
 
     return results_df
 
+def manual_checking(directory, filename, data):
+    take_inputs = ''
+    while take_inputs not in ['y', 'n']:
+        take_inputs = input(f'Do you want to take inputs for file {filename}? (y/n): ')
+        if take_inputs == 'n':
+            print(f'Skipping {filename}')
+        elif take_inputs == 'y':
+            for row_index in data.index:
+                    row_data = pd.DataFrame()
+                    # Create a copy of the row to avoid modifying the original DataFrame
+                    row_data_copy = data.iloc[row_index].copy()
+
+                    for (x, y) in data_points:
+                        x_data = row_data_copy[f'x.{x}.{y}']
+                        y_data = row_data_copy[f'y.{x}.{y}']
+                        r_data = row_data_copy[f'r.{x}.{y}']
+                        i_data = row_data_copy[f'i.{x}.{y}']
+                        t_f = row_data_copy[f'corrected_diff_.{x}.{y}']
+
+                        new_row = pd.DataFrame({
+                            'obj_xy': [(x, y)],
+                            'sensor_xy': [(x_data, y_data)],
+                            'r': [r_data],
+                            'intensity': [i_data],
+                            't_f': [t_f]
+                        })
+                        row_data = pd.concat([row_data, new_row], ignore_index=True)
+
+                    x_values = [coord[0] for coord in row_data['sensor_xy']]
+                    y_values = [coord[1] for coord in row_data['sensor_xy']]
+                    xobj_values = [coord[0] for coord in row_data['obj_xy']]
+                    yobj_values = [coord[1] for coord in row_data['obj_xy']]
+                    mean_r = row_data['r'].mean()
+                    row_data.loc[row_data['r'] >3000, 'r'] = 0
+
+                    for row in row_data.iterrows():
+                        t_f = row[1]['t_f']
+                        x, y = row[1]['sensor_xy']
+                        r = row[1]['r']
+                        i = row[1]['intensity']
+                        obj_x, obj_y = row[1]['obj_xy']
+                        difference = np.sqrt((x-obj_x)**2 + (y-obj_y)**2)
+                        obj_distance = np.sqrt((obj_x-left_origin[0])**2 + (obj_y-left_origin[1])**2)
+                        
+                        if r != 0 and difference < 300 and t_f == 0:
+
+                            fig, ax = plt.subplots()
+                            ax.scatter(x_values, y_values, c='black', marker='+')
+                            ax.scatter(xobj_values, yobj_values, c='grey', marker='o')
+                            ax.plot([x, obj_x], [y, obj_y], c='black', linestyle='--')
+                            plot_background(ax, data, data_points)
+                            ax.scatter(x, y, c='red', marker='o')
+                            ax.scatter(obj_x, obj_y, c='green', marker='o')
+                            ax.set_title(f'Filename: {filename}, x: {x}, y: {y}, r: {r}, i: {i}, obj_x: {obj_x}, obj_y: {obj_y}')
+                            plt.show()
+
+                            if difference < 20 and obj_y > 1300:
+                                tf = True
+                            else:
+                                t_f = input('Is this a true positive? (y/n): ')
+
+                        if t_f == 'y':
+                            row_data.at[row[0], 't_f'] = True
+                            data.at[row_index, f'corrected_diff_.{obj_x}.{obj_y}'] = True
+                        else:
+                            row_data.at[row[0], 't_f'] = False
+                            data.at[row_index, f'corrected_diff_.{obj_x}.{obj_y}'] = False
+
+            data.to_csv(os.path.join(directory, f'new{filename}'), index=False)
+            print(f'Saved new{filename} to {directory}')
+
+def correct_zero_tf(directory, filename, data, data_points):
+    for (x, y) in data_points:
+        tf = data[f'corrected_diff_.{x}.{y}']
+        tf.replace(0, False, inplace=True)
+        data[f'corrected_diff_.{x}.{y}'] = tf
+    
+    data.to_csv(os.path.join(directory, f'new{filename}'), index=True)
+    print(f'Saved new{filename} to {directory}')
+
+def polar2cartesian(r, theta, origin):
+    x = r * np.cos(theta) + origin[0]
+    y = r * np.sin(theta) + origin[1]
+    return x, y
+
 @time_function
-def plot_background(ax_obj, data: pd.DataFrame, data_points = None, limits = True):
+def plot_background(ax_obj, data, data_points = None, limits = True):
     x = [370, 480, 590, 700, 810, 920, 1030, 1140]
     y = [165, 330, 480, 630, 780, 930, 1080, 1300, 1520]
 
@@ -216,8 +305,13 @@ def plot_background(ax_obj, data: pd.DataFrame, data_points = None, limits = Tru
 def plot_diffs(ax_obj, diff_df: pd.DataFrame, data_points: list, l_r: str) -> None:
     for (x, y) in data_points:
         try:
-            diff_col = diff_df[f'diff_{x}_{y}']
+            t_f_col = diff_df[f'corrected_diff_.{x}.{y}']
+            diff_col = diff_df[f'diff_.{x}.{y}']
+            print(f'diff_col: {len(diff_col)}')
+            diff_col = diff_col[t_f_col.astype(bool)]
+            print(f't_f-diff_col: {len(diff_col)}')
             diff_col_nonzero = diff_col[diff_col != 0]
+            print(f'non-z-diff_col: {len(diff_col_nonzero)}')
             mean_diff = np.mean(diff_col_nonzero)
             if np.abs(mean_diff) < 30:
                 mean_diff_val = np.abs(mean_diff)/30
@@ -339,9 +433,203 @@ def custom_hist(differences, ax):
 
     return mu, std, q
 
+@time_function
+def plot_walls(data, data_points, overall_plot = False, ax = None):
+    overall_diffs = []
+
+    for row_index, row in data.iterrows():
+        row_data = pd.DataFrame()
+        # Create a copy of the row to avoid modifying the original DataFrame
+        row_data_copy = row.copy()
+
+        for (x, y) in data_points:
+            x_data = row_data_copy[f'x.{x}.{y}']
+            y_data = row_data_copy[f'y.{x}.{y}']
+            r_data = row_data_copy[f'r.{x}.{y}']
+            i_data = row_data_copy[f'i.{x}.{y}']
+            t_f = row_data_copy[f'corrected_diff_.{x}.{y}']
+            theta_data = row_data_copy[f'theta (rad)']
+            origin = (row_data_copy['x_origin'], row_data_copy['y_origin'])
+            wall_dis, wall_coordinates = calculate(theta_data, origin[0], origin[1], stage_x, room_x, room_y)
+            diff = r_data - wall_dis
+
+            x_w = wall_coordinates[0]
+            y_w = wall_coordinates[1]
+
+            new_row = pd.DataFrame({
+                'obj_xy': [(x, y)],
+                'sensor_xy': [(x_data, y_data)],
+                'wall_xy': [(x_w, y_w)],
+                'wall_r': [wall_dis],
+                'diff': [diff],
+                'r': [r_data],
+                'intensity': [i_data],
+                't_f': [t_f],
+            })
+            row_data = pd.concat([row_data, new_row], ignore_index=True)
+        
+        wall_data = row_data[(row_data['r'] != 10000) & (row_data['t_f'] != True) & (row_data['t_f'] != 'True')]
+        #point_data = row_data[(row_data['r'] != 10000) & ((row_data['t_f'] == True) | (row_data['t_f'] == 'True'))]
+                
+        #if row_index > 4:
+        overall_diffs.extend(wall_data['diff'])
+        #overall_diffs.extend(point_data['diff'])
+
+        '''
+        wall_x = [coord[0] for coord in wall_data['wall_xy']]
+        wall_y = [coord[1] for coord in wall_data['wall_xy']]
+        sensor_x = [coord[0] for coord in wall_data['sensor_xy']]
+        sensor_y = [coord[1] for coord in wall_data['sensor_xy']]
+        obj_x = [coord[0] for coord in wall_data['obj_xy']]
+        obj_y = [coord[1] for coord in wall_data['obj_xy']]
+        
+
+        fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
+        wall_distributions(wall_data['diff'], ax)
+        wall_distributions(wall_data['r'], ax1)
+        ax2.scatter(wall_x, wall_y, c='blue', marker='o')
+        ax2.scatter(sensor_x, sensor_y, c='black', marker='o')
+
+        plot_background(ax2, data, data_points, False)
+
+        plt.show()
+        '''
+    if overall_plot:
+        wall_distributions(overall_diffs, ax, 30)
+    
+    mu, std = norm.fit(overall_diffs)
+    return mu, std
+
+@time_function
+def calculate(angle, origin_x, origin_y, left_x_limit, room_x, room_y):
+    def distance_to_x(x, origin_x, origin_y, angle):
+        y_intersect = origin_y + np.tan(angle) * (x - origin_x)
+        if y_intersect > 0 and y_intersect < room_y:
+            return np.sqrt((x - origin_x)**2 + (y_intersect - origin_y)**2), y_intersect, x
+        else:
+            return 10000, 10000, 10000
+
+    def distance_to_y(y, origin_x, origin_y, angle):
+        x_intersect = origin_x + (y - origin_y) / np.tan(angle)
+        if x_intersect > 0 and x_intersect < room_x:
+            return np.sqrt((x_intersect - origin_x)**2 + (y - origin_y)**2), y, x_intersect
+        else:
+            return 10000, 10000, 10000
+    dist_x1, y_x1, x_x1 = distance_to_x(left_x_limit, origin_x, origin_y, angle)
+    dist_x2, y_x2, x_x2 = distance_to_x(room_x, origin_x, origin_y, angle)
+    dist_y, y_y, x_y = distance_to_y(room_y, origin_x, origin_y, angle)
+
+    min_distance = min(dist_x1, dist_x2, dist_y)
+
+    if min_distance == dist_x1:
+        coordinates = ((x_x1, y_x1))
+    elif min_distance == dist_x2:
+        coordinates = ((x_x2, y_x2))
+    else:
+        coordinates = ((x_y, y_y))
+    return min_distance, coordinates
+
+@time_function
+def wall_distributions(diffs, ax, bins = 10):
+
+    r = diffs
+    mu, std = norm.fit(r)
+    #print(f'mu: {mu}, std: {std}')
+    x = np.linspace(mu-5*std, mu+5*std, 1000)
+    p = norm.pdf(x, mu, std)
+    #x = x - mu
+    #r = r - mu
+
+    ax.hist(r, bins = bins, density = True, alpha = 0.4, color='r')
+    ax.scatter(x, p, c='black')
+
+    ax.title.set_text(f'Wall distribution, mu: {mu:.2f}, std: {std:.2f}')  
+
+@time_function
+def analise_offsets(data):
+    def sub_process(data, x_range, theta_range):
+        std_arr = np.zeros((len(x_range), len(theta_range)))
+        mu_arr = np.zeros((len(x_range), len(theta_range)))
+        for q, j in enumerate(x_range):
+                data_copy0 = data.copy()
+                data_copy0['x_origin'] = data_copy0['x_origin'] + j
+                for p, i in enumerate(theta_range):
+                    data_copy = data_copy0.copy()
+                    data_copy[f'theta (rad)'] = data_copy[f'theta (rad)'] + np.deg2rad(i)
+                    mu, std = plot_walls(data_copy, data_points)
+                    std_arr[q, p] = std
+                    mu_arr[q, p] = mu
+        return mu_arr, std_arr
     
 
+    start_theta = -30
+    end_theta = 30
+    start_x = -50
+    end_x = 50
+    std_master_arr = np.zeros((abs(start_x)+end_x, abs(start_theta)+end_theta))
+    mu_master_arr = np.zeros((abs(start_x)+end_x, abs(start_theta)+end_theta))
+    steps = 5
+    min_std = 1000
+    count = 0
+    count2 = 0
 
+    while count < 5:
+        theta_range = np.linspace(start_theta, end_theta, steps)
+        x_range = np.linspace(start_x, end_x, steps)
+        mu_arr, std_arr = sub_process(data, x_range, theta_range)
+
+        #std_master_arr[start_x:end_x, start_theta:end_theta] = std_arr
+        #mu_master_arr[start_x:end_x, start_theta:end_theta] = mu_arr
+        coords = np.unravel_index(np.argmin(std_arr, axis=None), std_arr.shape)
+        start_theta = theta_range[coords[1]] - steps
+        end_theta = theta_range[coords[1]] + steps
+        start_x = x_range[coords[0]] - steps
+        end_x = x_range[coords[0]] + steps
+
+        if np.min(std_arr) < min_std:
+            min_std = np.min(std_arr)
+            count2 +=1
+        else:
+            count += 1
+
+        if count2 > 5:
+            count +=1
+            count2 = 0    
+    
+    final_theta = theta_range[coords[1]]
+    final_x = x_range[coords[0]]
+    print(f'Final theta: {final_theta}, final x: {final_x}')
+
+    fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(24, 6))
+    ax.imshow(std_arr, cmap='hot', interpolation='nearest')
+    ax1.imshow(mu_arr, cmap='hot', interpolation='nearest')
+    ax.set_xticks(np.arange(len(theta_range)))
+    ax.set_yticks(np.arange(len(x_range)))
+    ax.set_xticklabels(theta_range)
+    ax.set_yticklabels(x_range)
+    ax.set_xlabel('Theta (degrees)')
+    ax.set_ylabel('X offset')
+    ax.set_title('Standard deviation of wall distances')
+    ax1.set_xticks(np.arange(len(theta_range)))
+    ax1.set_yticks(np.arange(len(x_range)))
+    ax1.set_xticklabels(theta_range)
+    ax1.set_yticklabels(x_range)
+    ax1.set_xlabel('Theta (degrees)')
+    ax1.set_ylabel('X offset')
+    ax1.set_title('Mean of wall distances')
+
+    data_copy = data.copy()
+    data_copy['x_origin'] = data_copy['x_origin'] + final_x
+    data_copy['theta (rad)'] = data_copy['theta (rad)'] + np.deg2rad(final_theta)
+    plot_walls(data_copy, data_points, True, ax2)
+    plt.show()   
+
+    return final_theta, final_x
+
+            
+  
+
+#%% initialise masks
 '''
 #if object csv and detector csv do not exist, create them
 if not os.path.exists(os.path.join(directory, 'objects.csv')):
@@ -365,12 +653,11 @@ obj_df = error.initialise_objects()
 detector_df = error.initialise_detector_masks()
 walls_df = error.initialise_walls()
 
-
+#%%
 for filename in os.listdir(directory):
-    if filename.endswith("data.csv"):
-        #fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
-        #fig.suptitle(filename)
-
+    #if filename.endswith("data.csv"):
+    if filename.endswith("data.csv") and filename.startswith("new180"):
+        print(f'\nFilename: {filename}')
         data = pd.read_csv(os.path.join(directory, filename))
         return_attributes(filename, data)
         data_points = return_data(data)
@@ -379,17 +666,256 @@ for filename in os.listdir(directory):
         left_origin = (data['x_origin'][0], data['y_origin'][0])
         right_origin = (data['x_origin'][17], data['y_origin'][17])
 
+        left_data = data[0:16].copy()
+        right_data = data[16:32].copy()
+        #left_data['theta (rad)'] = left_data['theta (rad)'] - np.deg2rad(data.offset_angle)
+        #right_data['theta (rad)'] = right_data['theta (rad)'] - np.deg2rad(data.offset_angle)
+        #data = pd.concat([left_data, right_data], ignore_index=True)
+
         left_detectors_df = adjust_detector_masks(detector_df, left_origin)
         right_detectors_df = adjust_detector_masks(detector_df, right_origin)
 
-        left_walls_df = error.generate_distances(walls_df, left_detectors_df, left_origin, False, True)
-        right_walls_df = error.generate_distances(walls_df, right_detectors_df, right_origin, False, True)
+        #left_walls_df = error.generate_distances(walls_df, left_detectors_df, left_origin, False, True)
+        #right_walls_df = error.generate_distances(walls_df, right_detectors_df, right_origin, False, True)
 
-        left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False)
-        right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False)
+        print(f'test')
+        left_detectors_df = error.generate_distances(obj_df, left_detectors_df, left_origin, False, False, data_df = data)
+        right_detectors_df = error.generate_distances(obj_df, right_detectors_df, right_origin, False, False, data_df = data)
 
-        print(f'\nFilename: {filename}')
-        for offset in range(-10, 11, 1):
+
+        #left_diffs = compare_data(data[0:16], left_detectors_df, left_walls_df, left_origin, data_points, ax2)
+        #right_diffs = compare_data(data[16:32], right_detectors_df, right_walls_df, right_origin, data_points, ax2)
+
+        #manual_checking(directory, filename, data)
+
+        #fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(18, 6))
+        #plot_diffs(ax1, left_data, data_points, 'left')
+        #plot_diffs(ax1, right_data, data_points, 'right')
+
+        #plot_walls(data, data_points, True, ax2)
+
+        #plt.show()
+        
+        '''
+        left_data = data[0:16].copy()
+        right_data = data[16:32].copy()
+        
+        l_final_theta, l_final_x = analise_offsets(left_data)
+        r_final_theta, r_final_x = analise_offsets(right_data)
+
+        change_l = input(f'change left by l_final_theta: {l_final_theta} and/or x_final: {l_final_x}')
+        if change_l == 'y':
+            quantity_l = int(input('Enter quantity: '))
+            quantity_lx = int(input('Enter x quantity: '))
+            left_data['theta (rad)'] = left_data['theta (rad)'] + np.deg2rad(quantity_l)
+            left_data['x_origin'] = left_data['x_origin'] + quantity_lx
+        
+        change_r = input(f'change right by r_final_theta: {r_final_theta} and/or x_final: {r_final_x}')
+        if change_r == 'y':
+            quantity_r = int(input('Enter quantity: '))
+            quantity_rx = int(input('Enter x quantity: '))
+            right_data['theta (rad)'] = right_data['theta (rad)'] + np.deg2rad(quantity_r)
+            right_data['x_origin'] = right_data['x_origin'] + quantity_rx
+
+        data = pd.concat([left_data, right_data], ignore_index=True)
+
+        data.to_csv(os.path.join(directory, f'corrected_angle_{quantity_l}_{quantity_r}_{filename}'), index=False)
+        print(f'Saved corrected_angle{quantity_l}_{quantity_r}{filename} to {directory}')
+        '''
+        
+
+
+
+#%%
+directory_180_0 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data3_180.0.full_data"
+directory_180_24 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_180.24.full_data"
+directory_90_0 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_90.0.full_data"
+directory_90_24 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_90.24.full_data"
+directory_180_29 = r"C:\Users\james\OneDrive - University of Southampton\PHYS part 3\BSc Project\Code\full_data2\new_data_180.29.full_data"
+
+directories = [directory_180_0, directory_180_24, directory_90_0, directory_90_24, directory_180_29]
+
+def run_directories(directory):
+    parts = directory.split('_')
+    subparts = parts[-2].split('.') 
+    separation = int(subparts[0])
+    offset_angle = int(subparts[1])
+
+    def coordinates(string_input):
+        string_input = string_input[1:-1]
+        string_input = string_input.split(',')
+        for i in range(0, len(string_input)):
+            if 'np.float64' in string_input[i]:
+                string_input[i] = string_input[i].strip(' ')
+                string_input[i] = string_input[i].strip('np.float64')
+                string_input[i] = string_input[i].strip('(')
+                string_input[i] = string_input[i].strip(')')
+        x, y = string_input
+        return float(x), float(y)
+
+    wall_points = []
+    for filename in os.listdir(directory):
+        fig, ax = plt.subplots(1, 2, figsize=(18, 6))
+        print(f'Filename: {filename}')
+        if filename.endswith(".csv"):
+            parts = filename.split('_')
+            parts[-1] = parts[-1].strip('.csv')
+        
+            data = pd.read_csv(os.path.join(directory, filename))
+            obj_xy = data['obj_xy']
+            sensor_xy = data['sensor_xy']
+
+            r = data['r']
+            i = data['intensity']
+            t_f = data['t_f']
+
+            wall_data = data[(data['t_f'] == False) & (data['r'] != 0)]
+            wall_distributions(wall_data, ax[0])
+            wall_points.append(wall_data)
+        plt.show()
+
+    fig, ax = plt.subplots(1, 1, figsize=(18, 6))
+    wall_distributions(pd.concat(wall_points), ax)
+    plt.show()
+
+    '''
+            for row_index in data.index:
+                if r[row_index] != 10000:
+                    #print(f'Row index: {row_index}, Filename: {filename}, obj_xy: {obj_xy[row_index]}, lenobjxy: {len(obj_xy[row_index])}, sensor_xy: {sensor_xy[row_index]}, r: {r[row_index]}, i: {i[row_index]}, t_f: {t_f[row_index]}')
+                    obj_x, obj_y = coordinates(obj_xy[row_index])
+                    sensor_x, sensor_y = coordinates(sensor_xy[row_index])
+
+                    tf_i = t_f[row_index]
+                    if tf_i:
+                        ax[0].scatter(obj_x, obj_y, c='grey', marker='o')
+                        ax[0].scatter(sensor_x, sensor_y, c='green', marker='o')
+                        ax[0].plot([sensor_x, obj_x], [sensor_y, obj_y], c='black', linestyle='--')
+                        plot_background(ax[0], True)
+                    else:
+                        #ax[1].scatter(obj_x, obj_y, c='grey', marker='o')
+                        ax[1].scatter(sensor_x, sensor_y, c='red', marker='o')
+                        #ax[1].plot([sensor_x, obj_x], [sensor_y, obj_y], c='black', linestyle='--')
+                        plot_background(ax[1], True)
+                        wall_points.append((sensor_x, sensor_y, row_index))
+
+        plt.show()
+    
+    fig, ax = plt.subplots(1, 1, figsize=(18, 6))
+    x = [x for x, y, i in wall_points]
+    y = [y for x, y, i in wall_points]
+    i = [i for x, y, i in wall_points]
+
+    for index, (x, y, i) in enumerate(wall_points):
+        print(f'Index: {index}')
+        if i > 15:
+            color = 'green'
+        else:
+            color = 'red'
+        ax.scatter(x, y, marker='o', color=color)
+    plot_background(ax, True)
+    plt.show()'''
+
+
+def plot_background(ax_obj, limits = True):
+    x = [370, 480, 590, 700, 810, 920, 1030, 1140]
+    y = [165, 330, 480, 630, 780, 930, 1080, 1300, 1520]
+
+    for i in x:
+        for j in y:
+            ax_obj.plot(i, j, marker='+', color='grey', markersize=5)
+
+    ax_obj.axvline(x=stage_x, color = 'grey', linestyle='--', label='Stage Edge')
+    ax_obj.axvline(x=room_x, color = 'grey', linestyle='--')
+    ax_obj.axhline(y=room_y, color = 'grey', linestyle='--')  
+
+    if limits:
+        ax_obj.set_xlim(0, room_x)
+        ax_obj.set_ylim(0, room_y+27)
+        ax_obj.set_aspect('equal')
+        ax_obj.set_xticks(x)
+        ax_obj.set_xticklabels(x)
+        for label in ax_obj.get_xticklabels():
+            label.set_rotation(-90)
+            label.set_horizontalalignment('right')
+        ax_obj.set_yticks(y)
+
+
+#%%
+def wall_distributions(wall_data, ax):
+    r = wall_data['r']
+    mu, std = norm.fit(r)
+    #print(f'mu: {mu}, std: {std}')
+    x = np.linspace(mu-5*std, mu+5*std, 1000)
+    p = norm.pdf(x, mu, std)
+    #x = x - mu
+    #r = r - mu
+
+    ax.hist(r, bins = 20, density = True, alpha = 0.4, color='r')
+    ax.scatter(x, p, c='black')
+
+    ax.title.set_text(f'Wall distribution, mu: {mu:.2f}, std: {std:.2f}')
+
+
+
+#%%
+for directory in directories:
+    run_directories(directory)
+#%%
+run_directories(directory_180_0)
+
+
+
+
+
+
+
+
+
+
+#%%
+'''
+        ax0.imshow(walls_df['mask'][0], cmap='grey', origin='lower')
+        ax1.imshow(walls_df['mask'][0], cmap='grey', origin='lower')
+        plot_background(ax0, data, data_points)
+        plot_background(ax1, data, data_points)
+
+        l_data_copy = data[0:16].copy()
+        l_data_copy.index = l_data_copy['theta (rad)']
+        r_data_copy = data[16:32].copy()
+        r_data_copy.index = r_data_copy['theta (rad)']
+
+        for (x, y) in data_points:
+            l_data_x = l_data_copy[f'x.{x}.{y}']
+            l_data_y = l_data_copy[f'y.{x}.{y}']
+            for index in l_data_copy.index:
+                rad_index = np.rad2deg(index)
+
+                if l_data_copy[f'r.{x}.{y}'][index] != 10000:
+                    if left_diffs[f'diff_{x}_{y}'][rad_index] == 0:
+                        ax0.scatter(l_data_x[index], l_data_y[index], c='r', marker='x')
+                    else:
+                        ax0.scatter(l_data_x[index], l_data_y[index], c='grey', marker='x')
+
+            r_data_x = r_data_copy[f'x.{x}.{y}']
+            r_data_y = r_data_copy[f'y.{x}.{y}']
+            for index in r_data_copy.index:
+                rad_index = np.rad2deg(index)
+                if r_data_copy[f'r.{x}.{y}'][index] != 10000:
+                    if right_diffs[f'diff_{x}_{y}'][rad_index] == 0:
+                        ax1.scatter(r_data_x[index], r_data_y[index], c='b', marker='x')
+                    else:
+                        ax1.scatter(r_data_x[index], r_data_y[index], c='grey', marker='x')
+
+        
+        plt.show()
+'''
+
+
+
+
+
+'''
+            
             fig, [ax, ax1, ax2] = plt.subplots(1, 3, figsize=(18, 6))
             fig.suptitle(filename)
             data_copy = data.copy()
@@ -414,3 +940,46 @@ for filename in os.listdir(directory):
 
             #print(f'Filename: {filename}, Points: {q}, Offset: {offset}, mu: {mu}, std: {std}')
             print(f'Offset: {offset}  |  Left Points: {lq:.1f}, Left mu: {lmu:.1f}, Left std: {lstd:.1f}  |  Right Points: {rq:.1f}, Right mu: {rmu:.1f}, Right std: {rstd:.1f}')
+'''
+# %%
+def return_data(data: pd.DataFrame):
+    #pattern = r"^(?P<prefix>corrected_diff|r|i|x|y|diff)_X(?P<xvalue>\d+)Y(?P<yvalue>\d+)$"
+    pattern = r"^(?P<prefix>corrected_diff_|r|i|x|y|diff_).(?P<xvalue>\d+).(?P<yvalue>\d+)$"
+    pattern2 = r"^(?P<prefix>corrected_diff).(?P<xvalue>\d+).(?P<yvalue>\d+)$"
+    data_points = []
+    for column in data.columns[4::]:
+        match = re.match(pattern, column)
+        match2 = re.match(pattern2, column)
+        if match:
+            prefix = match.group('prefix')
+            x = int(match.group('xvalue'))
+            y = int(match.group('yvalue'))
+            if (x, y) not in data_points and (x, y) != (0, 0):
+                data_points.append((x, y))
+        
+        elif match2:
+            prefix = match2.group('prefix')
+            x = int(match2.group('xvalue'))
+            y = int(match2.group('yvalue'))
+
+            if (x,y) in data_points:
+                data[f'corrected_diff_.{x}.{y}'] = data[f'corrected_diff.{x}.{y}']
+                data.drop(columns=[f'corrected_diff.{x}.{y}'], inplace=True)
+
+        else:
+            print(f'No match found for {column}')
+        
+    return data_points
+
+
+for filename in os.listdir(directory):
+    if filename.endswith("data.csv") and filename.startswith('new'):
+        data = pd.read_csv(os.path.join(directory, filename))
+        data_points = return_data(data)
+        
+        correct_zero_tf(directory, filename, data, data_points)
+
+        data.to_csv(os.path.join(directory, f'{filename}'), index=True)
+        print(f'Saved {filename}new to {directory}')
+
+# %%
