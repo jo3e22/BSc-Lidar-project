@@ -1,7 +1,6 @@
 import program_init as init
 import data_processing as dp
 import matplotlib.pyplot as plt
-import simulated_data_v2 as sim
 import numpy as np
 import re
 
