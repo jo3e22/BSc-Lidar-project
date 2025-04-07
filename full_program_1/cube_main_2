@@ -1,0 +1,265 @@
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import math as math
+import walls as walls
+import error as error
+from scipy.stats import norm
+
+# Read in the data
+directory = 'C:/Users/james/OneDrive - University of Southampton/PHYS part 3/BSc Project/Code/fixed_coordinates'
+#csv_folders = ['grid_data_only', '24offset_data_only', '29offset_data_only', '90sep_data_only', '90sep24offset_data_only']
+csv_folders = ['24offset_data_only']
+
+def correct_zeros(data):
+    '''
+    This function corrects the zeros in the data. If the intensity is zero, the radial value is replaced with 10000.
+    input: data - the data to be corrected
+    output: None
+    '''
+    data.loc[data['i'] == 0, 'r'] = 10000
+
+def normalise_intensities(data):
+    data['i'] = data['i'] * ((2*data['r'])**2)
+    data['i'] = data['i'] / data['i'].max()
+    data['i'] = data['i'] * 255
+    #print(f'min > 0: {data[data["i"]>0]["i"].min()}, max: {data["i"].max()}')
+
+def correct_origin(data):
+    data['x_origin'] += 50
+
+def add_xy(data):
+    '''
+    This function plots the data in cartesian coordinates.
+    input: data - the data to be plotted
+    output: None
+    '''
+    x = data['x_origin'] + data['r'] * np.cos(data['theta (rad)'])
+    y = data['r'] * np.sin(data['theta (rad)'])
+    data['x'] = x
+    data['y'] = y
+
+def extract_obj(file, fixing = False):
+    '''
+    This function extracts the object from the file name.
+    input: file - the file name
+    output: obj - the object
+    '''
+    x = [0, 370, 480, 590, 700, 810, 920, 1030, 1140]
+    y = [0, 165, 330, 480, 630, 780, 930, 1080, 1300, 1520]
+    file_name = str(file).split('.')
+    if file_name[-2] == 'csv':
+        obj = file_name[-4:-2]
+    else:
+        obj = file_name[-3:-1]
+
+    print(f'file: {file}, obj: {obj}')
+
+    if fixing == True:
+        if int(obj[0]) not in x:
+            print(f'error in x value for {file}')
+            print(f'x values: {x}, x value: {obj[0]}') 
+            obj[0] = input(f'Enter x value for {file}: ')    
+        
+        if int(obj[1]) not in y:
+            if int(obj[1]) == 1305 or int(obj[1]) == 1295 or int(obj[1]) == 1310:
+                obj[1] = 1300
+            elif int(obj[1]) == 1510:
+                obj[1] = 1520
+            else:
+                print(f'error in y value for {file}')
+                print(f'y values: {y}, y value: {int(obj[1])}') 
+                obj[1] = input(f'Enter y value for {file}: ')
+
+        new_prefix = file_name[0]
+        for i in range(1, len(file_name[0:-3])):
+            new_prefix + '.' + file_name[i]
+        
+        new_file_name = f'{new_prefix}.{int(obj[0])}.{int(obj[1])}.csv'
+
+        return obj, new_file_name
+
+    else:
+        return obj
+
+def plot_background(ax, data):
+    x = [370, 480, 590, 700, 810, 920, 1030, 1140]
+    y = [330, 480, 630, 780, 930, 1080, 1300, 1520]
+    room = np.zeros((1545, 1520))
+
+    for i in x:
+        for j in y:
+            ax.plot(i, j, '+', color='grey')
+    ax.plot(data['x_origin'][0], 0, 'o', color = 'blue')
+    ax.plot(data['x_origin'][17], 0, 'o', color = 'blue')
+    ax.axvline(x=223, color = 'grey', linestyle='dotted')
+    ax.axvline(x=1543, color = 'grey', linestyle='dotted')
+    ax.axhline(y=1520, color = 'grey', linestyle='dotted')
+
+def create_detector_mask(data, height, width):
+    theta = data['theta (rad)']
+    mask = np.zeros((width, height))
+    start_angle = theta-np.deg2rad(1.5)
+    end_angle = theta+np.deg2rad(1.5)
+    distance = data['r']
+    x_origin = data['x_origin']
+    y_origin = data['y_origin']
+    
+    mask1 = np.copy(mask)
+    for d in range(0, 16):
+        mask1 += create_binary_mask((x_origin[d], y_origin[d]), distance[d], start_angle[d], end_angle[d], (width, height), data['i'][d])
+    mask2 = np.copy(mask)
+    for d in range(16, 32):
+        mask2 += create_binary_mask((x_origin[d], y_origin[d]), distance[d], start_angle[d], end_angle[d], (width, height), data['i'][d])
+    #mask[(mask1 > 0) & (mask2 > 0)] = mask1[(mask1 > 0) & (mask2 > 0)] + mask2[(mask1 > 0) & (mask2 > 0)]
+    mask = mask1 + mask2
+    mask =np.clip(mask, 0, 3)
+
+    #mask[(mask1 + mask2 > 0)] = 255
+    return mask
+
+def create_binary_mask(origin, radius, start_angle, end_angle, image_size, intensity):
+    mask = np.zeros(image_size, dtype=np.uint8)
+    y, x = np.ogrid[:image_size[0], :image_size[1]]
+    distance_from_origin = np.sqrt((x - origin[0])**2 + (y - origin[1])**2)
+    angle_from_origin = np.arctan2(y - origin[1], x - origin[0])
+    angle_from_origin = (angle_from_origin + 2 * np.pi) % (2 * np.pi)
+    '''mask[(distance_from_origin >= radius-10) & 
+         (distance_from_origin <= radius+10) &
+         (angle_from_origin >= start_angle) & 
+         (angle_from_origin <= end_angle)] = (intensity)'''
+
+    if intensity > 0:
+        i_value = 3
+    else:
+        i_value = 1
+
+    mask[(distance_from_origin <= radius) & 
+         (angle_from_origin >= start_angle) & 
+         (angle_from_origin <= end_angle)] = i_value  #(intensity)+10
+    return mask
+
+def plot(data, ax1, ax2):
+    mask = create_detector_mask(data, 1545, 1550)
+    binary_mask = np.zeros_like(mask)
+    binary_mask[mask > 0] = 1 
+    obj = extract_obj(file)
+    ax1.imshow(mask, cmap = 'gray', origin = 'lower')
+    ax1.scatter(int(obj[0]), int(obj[1]), c = 'red', s = 50)
+    #ax1.plot([int(obj[0])-25, int(obj[0])+25], [int(obj[1]), int(obj[1])], color = 'red', linewidth = 10)
+    ax1.set_aspect('equal')
+    ax1.axis('off')
+    plot_background(ax1, data)
+
+    plot_background(ax2, data)
+    x, y = data['x'], data['y']
+    ax2.scatter(int(obj[0]), int(obj[1]), c = 'red', s = 50)
+    ax2.plot([data['x_origin'], x], [data['y_origin'], y], color = 'gray', linewidth = 0.5)
+    ax2.scatter(x, y, c = data['i'], cmap = 'viridis', s = 10)
+    ax2.set_title(file)
+    ax2.set_ylim(0, 1550)
+    ax2.set_xlim(0, 1545)
+    ax2.set_aspect('equal')
+    ax2.axis('off')
+
+def read_file(file):
+    data = pd.read_csv(os.path.join(csv_folder, file))
+    correct_origin(data)
+    correct_zeros(data)
+    normalise_intensities(data)
+    add_xy(data)
+
+    return data
+
+def plot_hist_simple(differences, ax, limit = 100, extras = False):
+    included_diffs = []
+    for diff in differences:
+        if diff < limit and diff > -limit:
+            included_diffs.append(diff)
+    
+    mu, std = norm.fit(included_diffs)
+    ax.hist(differences, bins = 30, density = True, alpha = 0.6, color='g', label = 'histogram of differences')
+
+    xmin, xmax = plt.xlim()
+    x = np.linspace(xmin, xmax, 300)
+    p = norm.pdf(x, mu, std)
+
+    ax.plot(x, p, 'k', linewidth=2, label = 'fit results: mu = %.2f,  std = %.2f' % (mu, std))
+
+    title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
+    ax.set_title(title)
+
+    if extras == True:
+        ax.axvline(mu, color='r', linestyle='dashed', linewidth=1, label = 'mean')
+        ax.axvline(mu-std, color='grey', linestyle='dashed', linewidth=1, label = '1 std')
+        ax.axvline(mu+std, color='grey', linestyle='dashed', linewidth=1)
+        ax.axvline(limit, color='black', linestyle='dashed', linewidth=1, label = 'limit of included values')
+        ax.axvline(-limit, color='black', linestyle='dashed', linewidth=1)
+        ax.legend()
+
+def analise(folder, file, data, obj):
+    print(f'folder: {folder} \nfile: {file} \ndifferences: {folder_diffs}\n\n')
+    fig, ax = plt.subplots(1, 2, figsize = (30, 15))
+    _ = error.run(data, obj, ax[1])
+    plot(data, ax[0], ax[1])
+    plt.show()
+
+
+
+
+
+super_diffs = []
+for folder in csv_folders:
+    fig, ax = plt.subplots(1, 2, figsize = (30, 15))
+    value_range = np.linspace(0, 30, 90)
+
+    differences = []
+    files = os.listdir(folder)
+    for i in range(len(files)):
+        folder_diffs = []
+        file = files[i]
+
+        data = pd.read_csv(os.path.join(folder, file))
+        file_name = str(file).strip('.csv')
+        obj = extract_obj(file)
+
+        for diff in data['r_diff']:
+            diff = np.nan_to_num(diff, nan=0.0)
+ 
+            diff = int(diff*10000)
+            diff = diff/10000
+
+            if diff != 0:
+                folder_diffs.append(diff)
+                differences.append(diff)
+                super_diffs.append(diff)
+        
+        folder_mean = np.mean(folder_diffs)
+        value = np.abs(folder_mean)
+        # Normalize the value to be between 0 and 1 for colormap
+        normalized_value = (value - min(value_range)) / (max(value_range) - min(value_range))
+        color = plt.cm.YlOrRd(normalized_value)
+        ax[0].plot(int(obj[0]), int(obj[1]), 'o', color = color, markersize = 20)
+        ax[0].text(int(obj[0])-20, int(obj[1])-10, f'{folder_mean:.0f}', fontsize=12, ha='right', va='bottom', color='black')
+
+        #if value > 20:
+            #analise(folder, file, data, obj)
+            
+    plot_background(ax[0], data)
+    ax[0].set_xlim(0, 1545)
+    ax[0].set_ylim(0, 1550)
+    ax[0].set_title(folder)
+
+    plot_hist_simple(differences, ax[1], limit = 1000, extras = True)
+    fig.suptitle(folder)
+    plt.show()
+
+
+
+'''
+fig, ax = plt.subplots(1, 1, figsize = (30, 15))
+plot_hist_simple(super_diffs, ax)
+fig.suptitle('All')
+plt.show()
+'''
